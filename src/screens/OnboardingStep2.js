@@ -3,12 +3,15 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import colors from '../assets/colors';
+import { validateLifeSituation } from '../utils/validation';
+import useStore from '../state/store';
 
 function OnboardingStep2({ navigation, route }) {
   const [lifeSituation, setLifeSituation] = useState('');
   const onboardingData = route.params?.onboardingData || {};
+  const updateUser = useStore((state) => state.updateUser);
 
   const situations = [
     'Student',
@@ -21,10 +24,22 @@ function OnboardingStep2({ navigation, route }) {
   ];
 
   const handleNext = () => {
+    // Validate life situation
+    const validation = validateLifeSituation(lifeSituation);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.error);
+      return;
+    }
+
+    // Save to store
+    updateUser({
+      lifeSituation: validation.value,
+    });
+
     navigation.navigate('OnboardingStep3', {
       onboardingData: {
         ...onboardingData,
-        lifeSituation,
+        lifeSituation: validation.value,
       },
     });
   };

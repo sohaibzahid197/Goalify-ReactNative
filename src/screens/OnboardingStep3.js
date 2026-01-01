@@ -3,12 +3,15 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import colors from '../assets/colors';
+import { validateGoals } from '../utils/validation';
+import useStore from '../state/store';
 
 function OnboardingStep3({ navigation, route }) {
   const [selectedGoals, setSelectedGoals] = useState([]);
   const onboardingData = route.params?.onboardingData || {};
+  const updateUser = useStore((state) => state.updateUser);
 
   const goals = [
     'Health & Fitness',
@@ -30,10 +33,22 @@ function OnboardingStep3({ navigation, route }) {
   };
 
   const handleNext = () => {
+    // Validate goals
+    const validation = validateGoals(selectedGoals);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.error);
+      return;
+    }
+
+    // Save to store
+    updateUser({
+      mainGoals: validation.value,
+    });
+
     navigation.navigate('OnboardingStep4', {
       onboardingData: {
         ...onboardingData,
-        mainGoals: selectedGoals,
+        mainGoals: validation.value,
       },
     });
   };

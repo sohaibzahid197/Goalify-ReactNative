@@ -4,12 +4,25 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Dimensions, Alert } from 'react-native';
+import { useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../assets/colors';
 import useStore from '../state/store';
 import { userActions, settingsActions } from '../state/actions';
+import { validateAge, validateEmail, validateName } from '../utils/validation';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Responsive font size function
+const scaleFontSize = (size) => {
+  const scale = SCREEN_WIDTH / 375; // Base width (iPhone X)
+  return Math.max(12, Math.min(size * scale, size * 1.2));
+};
 
 function SettingsScreen() {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const user = useStore((state) => state.user);
   const settings = useStore((state) => state.settings);
   const [name, setName] = useState(user.name || '');
@@ -18,17 +31,66 @@ function SettingsScreen() {
   const [gender, setGender] = useState(user.gender || '');
   const [lifeSituation, setLifeSituation] = useState(user.lifeSituation || '');
   const [difficultyPreference, setDifficultyPreference] = useState(user.difficultyPreference || settings.difficultyPreference || 'medium');
+  
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [ageError, setAgeError] = useState('');
+
+  const handleNameChange = (text) => {
+    setName(text);
+    setNameError('');
+  };
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    setEmailError('');
+  };
+
+  const handleAgeChange = (text) => {
+    setAge(text);
+    setAgeError('');
+  };
 
   const handleSaveProfile = () => {
+    // Validate name
+    const nameValidation = validateName(name);
+    if (!nameValidation.isValid) {
+      setNameError(nameValidation.error);
+      Alert.alert('Validation Error', nameValidation.error);
+      return;
+    }
+
+    // Validate email (if provided)
+    if (email && email.trim() !== '') {
+      const emailValidation = validateEmail(email);
+      if (!emailValidation.isValid) {
+        setEmailError(emailValidation.error);
+        Alert.alert('Validation Error', emailValidation.error);
+        return;
+      }
+    }
+
+    // Validate age (if provided)
+    if (age && age.trim() !== '') {
+      const ageValidation = validateAge(age);
+      if (!ageValidation.isValid) {
+        setAgeError(ageValidation.error);
+        Alert.alert('Validation Error', ageValidation.error);
+        return;
+      }
+    }
+
+    // Save to store (will be persisted automatically)
     userActions.updateUser({
-      name,
-      email,
-      age: age ? parseInt(age) : null,
+      name: nameValidation.value,
+      email: email && email.trim() !== '' ? email.trim() : user.email || '',
+      age: age && age.trim() !== '' ? parseInt(age, 10) : user.age || null,
       gender,
       lifeSituation,
       difficultyPreference,
     });
-    alert('Profile updated successfully!');
+    
+    Alert.alert('Success', 'Profile updated successfully!');
   };
 
   const handleToggleNotifications = () => {
@@ -45,51 +107,63 @@ function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Manage your account and preferences</Text>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]} 
+      contentContainerStyle={styles.content}
+    >
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 20) }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Settings</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>Manage your account and preferences</Text>
       </View>
 
       {/* Profile Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Profile Information</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Profile Information</Text>
         
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Name</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, nameError && styles.inputError]}
             placeholder="Enter your name"
             placeholderTextColor={colors.textLight}
             value={name}
-            onChangeText={setName}
+            onChangeText={handleNameChange}
           />
+          {nameError ? (
+            <Text style={styles.errorText}>{nameError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, emailError && styles.inputError]}
             placeholder="Enter your email"
             placeholderTextColor={colors.textLight}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={handleEmailChange}
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {emailError ? (
+            <Text style={styles.errorText}>{emailError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Age</Text>
           <TextInput
-            style={styles.input}
-            placeholder="Enter your age"
+            style={[styles.input, ageError && styles.inputError]}
+            placeholder="Enter your age (1-120)"
             placeholderTextColor={colors.textLight}
             value={age}
-            onChangeText={setAge}
+            onChangeText={handleAgeChange}
             keyboardType="numeric"
             maxLength={3}
           />
+          {ageError ? (
+            <Text style={styles.errorText}>{ageError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
@@ -120,8 +194,8 @@ function SettingsScreen() {
       </View>
 
       {/* Preferences Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Preferences</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Preferences</Text>
 
         <View style={styles.settingItem}>
           <View style={styles.settingInfo}>
@@ -206,8 +280,8 @@ function SettingsScreen() {
       </View>
 
       {/* About Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>About</Text>
         <View style={styles.aboutItem}>
           <Text style={styles.aboutLabel}>App Version</Text>
           <Text style={styles.aboutValue}>1.0.0</Text>
@@ -224,27 +298,26 @@ function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
+    paddingBottom: 20,
   },
   header: {
-    marginTop: 10,
-    marginBottom: 30,
+    marginBottom: Math.max(SCREEN_WIDTH * 0.08, 24),
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
   },
   title: {
-    fontSize: 32,
+    fontSize: scaleFontSize(32),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.textLight,
+    fontSize: scaleFontSize(16),
+    lineHeight: scaleFontSize(22),
   },
   section: {
-    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
@@ -258,9 +331,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: scaleFontSize(20),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 20,
   },
   inputGroup: {
@@ -280,6 +352,16 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.borderLight,
+  },
+  inputError: {
+    borderColor: colors.error,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   saveButton: {
     backgroundColor: colors.primary,

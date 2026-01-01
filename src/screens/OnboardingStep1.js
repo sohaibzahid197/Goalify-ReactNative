@@ -3,22 +3,51 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
 import colors from '../assets/colors';
+import { validateAge, validateGender } from '../utils/validation';
+import useStore from '../state/store';
 
 function OnboardingStep1({ navigation, route }) {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
+  const [ageError, setAgeError] = useState('');
   const onboardingData = route.params?.onboardingData || {};
+  const updateUser = useStore((state) => state.updateUser);
 
   const genders = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
+  const handleAgeChange = (text) => {
+    setAge(text);
+    setAgeError('');
+  };
+
   const handleNext = () => {
+    // Validate age
+    const ageValidation = validateAge(age);
+    if (!ageValidation.isValid) {
+      setAgeError(ageValidation.error);
+      return;
+    }
+
+    // Validate gender
+    const genderValidation = validateGender(gender);
+    if (!genderValidation.isValid) {
+      Alert.alert('Validation Error', genderValidation.error);
+      return;
+    }
+
+    // Save to store
+    updateUser({
+      age: ageValidation.value,
+      gender: genderValidation.value,
+    });
+
     navigation.navigate('OnboardingStep2', {
       onboardingData: {
         ...onboardingData,
-        age: parseInt(age),
-        gender,
+        age: ageValidation.value,
+        gender: genderValidation.value,
       },
     });
   };
@@ -34,14 +63,17 @@ function OnboardingStep1({ navigation, route }) {
       <View style={styles.form}>
         <Text style={styles.label}>Age</Text>
         <TextInput
-          style={styles.input}
-          placeholder="Enter your age"
+          style={[styles.input, ageError && styles.inputError]}
+          placeholder="Enter your age (1-120)"
           placeholderTextColor={colors.textLight}
           value={age}
-          onChangeText={setAge}
+          onChangeText={handleAgeChange}
           keyboardType="numeric"
           maxLength={3}
         />
+        {ageError ? (
+          <Text style={styles.errorText}>{ageError}</Text>
+        ) : null}
 
         <Text style={styles.label}>Gender</Text>
         <View style={styles.genderContainer}>
@@ -135,6 +167,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+  },
+  inputError: {
+    borderColor: colors.error,
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
   genderContainer: {
     flexDirection: 'row',

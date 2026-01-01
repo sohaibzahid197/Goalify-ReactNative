@@ -4,8 +4,12 @@
  */
 
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const useStore = create((set) => ({
+const useStore = create(
+  persist(
+    (set) => ({
   // User profile
   user: {
     id: null,
@@ -58,12 +62,67 @@ const useStore = create((set) => ({
   completeChallenge: (challengeId) => set((state) => {
     const challenge = state.challenges.find(c => c.id === challengeId);
     if (challenge) {
+      const completedChallenge = {
+        ...challenge,
+        completedAt: new Date().toISOString(),
+        status: 'completed',
+        progress: 100,
+      };
       return {
         challenges: state.challenges.filter(c => c.id !== challengeId),
-        completedChallenges: [...state.completedChallenges, challenge],
+        completedChallenges: [...state.completedChallenges, completedChallenge],
+        activeChallenge: state.activeChallenge?.id === challengeId ? null : state.activeChallenge,
       };
     }
     return state;
+  }),
+  updateChallengeProgress: (challengeId, progress) => set((state) => {
+    const challenge = state.challenges.find(c => c.id === challengeId);
+    if (!challenge) return state;
+    
+    const clampedProgress = Math.min(100, Math.max(0, progress));
+    const isCompleted = clampedProgress >= 100 && challenge.status !== 'completed';
+    
+    if (isCompleted) {
+      // Move to completed challenges
+      const completedChallenge = {
+        ...challenge,
+        progress: 100,
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      };
+      
+      return {
+        challenges: state.challenges.filter(c => c.id !== challengeId),
+        completedChallenges: [...state.completedChallenges, completedChallenge],
+        activeChallenge: state.activeChallenge?.id === challengeId ? null : state.activeChallenge,
+      };
+    } else {
+      // Update progress in active challenges
+      const updatedChallenges = state.challenges.map(c => {
+        if (c.id === challengeId) {
+          return {
+            ...c,
+            progress: clampedProgress,
+          };
+        }
+        return c;
+      });
+      
+      // Update active challenge if it's the one being updated
+      let updatedActiveChallenge = state.activeChallenge;
+      if (state.activeChallenge?.id === challengeId) {
+        const updated = updatedChallenges.find(c => c.id === challengeId);
+        if (updated) {
+          updatedActiveChallenge = updated;
+        }
+      }
+      
+      return {
+        challenges: updatedChallenges,
+        activeChallenge: updatedActiveChallenge,
+      };
+    }
   }),
   
   setGoals: (goals) => set({ goals }),
@@ -113,6 +172,20 @@ const useStore = create((set) => ({
       language: 'en',
     },
   }),
-}));
+    }),
+    {
+      name: 'goalify-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        user: state.user,
+        streak: state.streak,
+        challenges: state.challenges,
+        activeChallenge: state.activeChallenge,
+        completedChallenges: state.completedChallenges,
+        settings: state.settings,
+      }),
+    }
+  )
+);
 
 export default useStore;

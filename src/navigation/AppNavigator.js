@@ -132,6 +132,7 @@ function MainTabs() {
         options={{
           title: 'Streak',
           tabBarLabel: 'Streak',
+          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -140,6 +141,7 @@ function MainTabs() {
         options={{
           title: 'History',
           tabBarLabel: 'History',
+          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -148,6 +150,7 @@ function MainTabs() {
         options={{
           title: 'Settings',
           tabBarLabel: 'Settings',
+          headerShown: false,
         }}
       />
     </Tab.Navigator>

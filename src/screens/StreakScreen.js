@@ -4,11 +4,23 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../assets/colors';
 import useStore from '../state/store';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Responsive font size function
+const scaleFontSize = (size) => {
+  const scale = SCREEN_WIDTH / 375; // Base width (iPhone X)
+  return Math.max(12, Math.min(size * scale, size * 1.2));
+};
+
 function StreakScreen() {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const streak = useStore((state) => state.streak);
 
   const getStreakMessage = () => {
@@ -26,10 +38,13 @@ function StreakScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Your Streak</Text>
-        <Text style={styles.subtitle}>{getStreakMessage()}</Text>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]} 
+      contentContainerStyle={styles.content}
+    >
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 20) }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Your Streak</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{getStreakMessage()}</Text>
       </View>
 
       {/* Current Streak Display */}
@@ -45,23 +60,23 @@ function StreakScreen() {
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{streak.longestStreak}</Text>
-          <Text style={styles.statLabel}>Longest Streak</Text>
+        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.statValue, { color: theme.colors.primary }]}>{streak.longestStreak}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>Longest Streak</Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>
+        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.statValue, { color: theme.colors.primary }]}>
             {streak.lastActivityDate
               ? new Date(streak.lastActivityDate).toLocaleDateString()
               : 'Never'}
           </Text>
-          <Text style={styles.statLabel}>Last Activity</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>Last Activity</Text>
         </View>
       </View>
 
       {/* Progress Section */}
       <View style={styles.progressSection}>
-        <Text style={styles.sectionTitle}>Milestones</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Milestones</Text>
         <View style={styles.milestonesList}>
           {[7, 30, 60, 100, 365].map((milestone) => {
             const achieved = streak.currentStreak >= milestone;
@@ -73,13 +88,15 @@ function StreakScreen() {
                 key={milestone}
                 style={[
                   styles.milestoneItem,
+                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline },
                   achieved && styles.milestoneItemAchieved,
-                  isNext && styles.milestoneItemNext,
+                  isNext && { borderColor: theme.colors.primary },
                 ]}
               >
                 <Text
                   style={[
                     styles.milestoneText,
+                    { color: theme.colors.onSurface },
                     achieved && styles.milestoneTextAchieved,
                   ]}
                 >
@@ -96,12 +113,12 @@ function StreakScreen() {
 
       {/* Tips Section */}
       <View style={styles.tipsSection}>
-        <Text style={styles.sectionTitle}>Keep Your Streak Going</Text>
-        <View style={styles.tipsList}>
-          <Text style={styles.tipItem}>• Complete at least one challenge daily</Text>
-          <Text style={styles.tipItem}>• Set reminders to stay consistent</Text>
-          <Text style={styles.tipItem}>• Celebrate small wins along the way</Text>
-          <Text style={styles.tipItem}>• Don't break the chain!</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Keep Your Streak Going</Text>
+        <View style={[styles.tipsList, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.tipItem, { color: theme.colors.onSurface }]}>• Complete at least one challenge daily</Text>
+          <Text style={[styles.tipItem, { color: theme.colors.onSurface }]}>• Set reminders to stay consistent</Text>
+          <Text style={[styles.tipItem, { color: theme.colors.onSurface }]}>• Celebrate small wins along the way</Text>
+          <Text style={[styles.tipItem, { color: theme.colors.onSurface }]}>• Don't break the chain!</Text>
         </View>
       </View>
     </ScrollView>
@@ -111,24 +128,24 @@ function StreakScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
+    paddingBottom: 20,
   },
   header: {
-    marginTop: 10,
-    marginBottom: 30,
+    marginBottom: Math.max(SCREEN_WIDTH * 0.08, 24),
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
   },
   title: {
-    fontSize: 32,
+    fontSize: scaleFontSize(32),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.textLight,
+    fontSize: scaleFontSize(16),
+    lineHeight: scaleFontSize(22),
   },
   streakDisplay: {
     alignItems: 'center',
@@ -171,9 +188,8 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: colors.card,
     borderRadius: 16,
-    padding: 20,
+    padding: Math.max(SCREEN_WIDTH * 0.053, 16),
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -185,37 +201,32 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: scaleFontSize(24),
     fontWeight: 'bold',
-    color: colors.primary,
     marginBottom: 8,
   },
   statLabel: {
-    fontSize: 14,
-    color: colors.textLight,
+    fontSize: scaleFontSize(14),
     textAlign: 'center',
   },
   progressSection: {
     marginBottom: 30,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: scaleFontSize(20),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 16,
   },
   milestonesList: {
     gap: 12,
   },
   milestoneItem: {
-    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.borderLight,
   },
   milestoneItemAchieved: {
     backgroundColor: colors.success,
@@ -226,9 +237,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   milestoneText: {
-    fontSize: 16,
+    fontSize: scaleFontSize(16),
     fontWeight: '600',
-    color: colors.text,
   },
   milestoneTextAchieved: {
     color: colors.background,
@@ -246,15 +256,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   tipsList: {
-    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 20,
   },
   tipItem: {
-    fontSize: 16,
-    color: colors.text,
+    fontSize: scaleFontSize(16),
     marginBottom: 12,
-    lineHeight: 24,
+    lineHeight: scaleFontSize(24),
   },
 });
 

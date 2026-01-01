@@ -3,7 +3,7 @@
  * Main dashboard showing today's challenge with modern UI
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import LinearGradient from 'react-native-linear-gradient';
@@ -11,12 +11,47 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import useStore from '../state/store';
 import { Card, Button, ProgressRing, Badge } from '../components';
 import { GRADIENTS } from '../assets/colors';
+import { streakActions, challengeActions } from '../state/actions';
+import { autoUpdateStreak } from '../utils/streakManager';
+import { updateChallengeProgress } from '../utils/challengeProgress';
 
 function HomeScreen({ navigation }) {
   const theme = useTheme();
   const activeChallenge = useStore((state) => state.activeChallenge);
   const streak = useStore((state) => state.streak);
   const user = useStore((state) => state.user);
+  const updateStreak = useStore((state) => state.updateStreak);
+  const setActiveChallenge = useStore((state) => state.setActiveChallenge);
+
+  // Auto-update streak and challenge progress on mount
+  useEffect(() => {
+    // Check and update streak
+    const newStreakState = autoUpdateStreak(streak);
+    if (newStreakState.shouldUpdate) {
+      updateStreak({
+        currentStreak: newStreakState.currentStreak,
+        longestStreak: newStreakState.longestStreak,
+        lastActivityDate: newStreakState.lastActivityDate,
+      });
+    }
+
+    // Update active challenge progress
+    if (activeChallenge) {
+      const updatedChallenge = updateChallengeProgress(activeChallenge);
+      if (updatedChallenge.progress !== activeChallenge.progress) {
+        challengeActions.updateChallengeProgress(activeChallenge.id, updatedChallenge.progress);
+        
+        // Update active challenge if it changed
+        if (updatedChallenge.status === 'completed' && activeChallenge.status !== 'completed') {
+          // Challenge completed - move to completed and clear active
+          challengeActions.completeChallenge(activeChallenge.id);
+        } else if (updatedChallenge.status !== 'completed') {
+          setActiveChallenge(updatedChallenge);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
 
   const getGreeting = () => {
     const hour = new Date().getHours();

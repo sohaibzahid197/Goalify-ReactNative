@@ -28,17 +28,39 @@ export const streakActions = {
   updateStreak: (updates) => useStore.getState().updateStreak(updates),
   incrementStreak: () => {
     const { streak } = useStore.getState();
-    const newStreak = streak.currentStreak + 1;
-    useStore.getState().updateStreak({
-      currentStreak: newStreak,
-      longestStreak: Math.max(newStreak, streak.longestStreak),
-      lastActivityDate: new Date().toISOString(),
-    });
+    const today = new Date().toISOString();
+    
+    // Only increment if last activity wasn't today
+    const lastActivity = streak.lastActivityDate;
+    const isToday = lastActivity && new Date(lastActivity).toDateString() === new Date().toDateString();
+    
+    if (!isToday) {
+      const newStreak = streak.currentStreak + 1;
+      useStore.getState().updateStreak({
+        currentStreak: newStreak,
+        longestStreak: Math.max(newStreak, streak.longestStreak),
+        lastActivityDate: today,
+      });
+    }
   },
   resetStreak: () => useStore.getState().updateStreak({
     currentStreak: 0,
     lastActivityDate: null,
   }),
+  checkAndUpdateStreak: () => {
+    const { streak } = useStore.getState();
+    // Import streakManager dynamically to avoid circular dependencies
+    const streakManager = require('../utils/streakManager');
+    const newState = streakManager.autoUpdateStreak(streak);
+    
+    if (newState.shouldUpdate) {
+      useStore.getState().updateStreak({
+        currentStreak: newState.currentStreak,
+        longestStreak: newState.longestStreak,
+        lastActivityDate: newState.lastActivityDate,
+      });
+    }
+  },
 };
 
 /**
@@ -48,8 +70,27 @@ export const challengeActions = {
   setChallenges: (challenges) => useStore.getState().setChallenges(challenges),
   addChallenge: (challenge) => useStore.getState().addChallenge(challenge),
   setActiveChallenge: (challenge) => useStore.getState().setActiveChallenge(challenge),
-  completeChallenge: (challengeId) => useStore.getState().completeChallenge(challengeId),
+  completeChallenge: (challengeId) => {
+    const state = useStore.getState();
+    const challenge = state.challenges.find(c => c.id === challengeId);
+    if (challenge) {
+      const completedChallenge = {
+        ...challenge,
+        completedAt: new Date().toISOString(),
+        status: 'completed',
+        progress: 100,
+      };
+      useStore.setState({
+        challenges: state.challenges.filter(c => c.id !== challengeId),
+        completedChallenges: [...state.completedChallenges, completedChallenge],
+        activeChallenge: state.activeChallenge?.id === challengeId ? null : state.activeChallenge,
+      });
+    }
+  },
   clearActiveChallenge: () => useStore.getState().setActiveChallenge(null),
+  updateChallengeProgress: (challengeId, progress) => {
+    useStore.getState().updateChallengeProgress(challengeId, progress);
+  },
 };
 
 /**

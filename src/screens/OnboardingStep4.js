@@ -3,10 +3,10 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import colors from '../assets/colors';
 import useStore from '../state/store';
-import { userActions } from '../state/actions';
+import { validateDifficulty } from '../utils/validation';
 
 function OnboardingStep4({ navigation, route }) {
   const [difficulty, setDifficulty] = useState('');
@@ -20,10 +20,17 @@ function OnboardingStep4({ navigation, route }) {
   ];
 
   const handleComplete = () => {
-    // Save onboarding data to store
+    // Validate difficulty
+    const validation = validateDifficulty(difficulty);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.error);
+      return;
+    }
+
+    // Save all onboarding data to store (will be persisted automatically)
     updateUser({
       ...onboardingData,
-      difficultyPreference: difficulty,
+      difficultyPreference: validation.value,
       onboardingCompleted: true,
       createdAt: new Date().toISOString(),
     });

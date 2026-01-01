@@ -3,8 +3,10 @@
  * Handles OpenAI API integration for challenge generation
  */
 
-// TODO: Add your OpenAI API key
-const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY_HERE';
+// OpenAI API Configuration
+// NOTE: Set your OpenAI API key as an environment variable or replace the placeholder
+// For React Native, you can use react-native-config or similar package
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY_HERE';
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 /**
@@ -62,14 +64,61 @@ export const generateChallenge = async ({
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      // Get detailed error information
+      // Read response as text first (can only read once)
+      let errorMessage = `OpenAI API error: ${response.status} ${response.statusText || 'Unknown error'}`;
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          try {
+            // Try to parse as JSON
+            const errorData = JSON.parse(errorText);
+            if (errorData.error) {
+              errorMessage = `OpenAI API error (${response.status}): ${errorData.error.message || errorData.error.type || 'Unknown error'}`;
+              if (errorData.error.code) {
+                errorMessage += ` [Code: ${errorData.error.code}]`;
+              }
+            } else {
+              errorMessage = `OpenAI API error (${response.status}): ${errorText.substring(0, 200)}`;
+            }
+          } catch (jsonError) {
+            // Not JSON, use text as is
+            errorMessage = `OpenAI API error (${response.status}): ${errorText.substring(0, 200)}`;
+          }
+        }
+      } catch (textError) {
+        // If we can't read the response body, use status
+        errorMessage = `OpenAI API error: ${response.status} ${response.statusText || 'Request failed'}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
+    
+    // Check if response has the expected structure
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format from OpenAI API');
+    }
+    
     const challengeText = data.choices[0].message.content;
     
+    if (!challengeText) {
+      throw new Error('Empty response from OpenAI API');
+    }
+    
     // Parse the JSON response
-    const challenge = JSON.parse(challengeText);
+    let challenge;
+    try {
+      challenge = JSON.parse(challengeText);
+    } catch (parseError) {
+      // Try to extract JSON from markdown code blocks if present
+      const jsonMatch = challengeText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        challenge = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      }
+    }
     
     // Add metadata
     return {
@@ -80,7 +129,16 @@ export const generateChallenge = async ({
       progress: 0,
     };
   } catch (error) {
+    // Enhanced error logging
     console.error('Error generating challenge:', error);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      goal: goal,
+      difficulty: difficulty,
+      duration: duration,
+      apiKeyPresent: !!OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE',
+    });
     
     // Return a fallback challenge if API fails
     return {
@@ -131,9 +189,25 @@ export const generateChallengeOptions = async (params) => {
  * @param {number} progress - Progress percentage (0-100)
  */
 export const updateChallengeProgress = (challengeId, progress) => {
-  // This would typically update the challenge in the store or backend
-  // For now, it's a placeholder
-  console.log(`Updating challenge ${challengeId} progress to ${progress}%`);
+  // Import challengeProgress utility
+  const challengeProgress = require('../utils/challengeProgress');
+  
+  // This function is typically called from actions, but can be used directly
+  // The actual update happens in the store via actions
+  const clampedProgress = Math.min(100, Math.max(0, progress));
+  console.log(`Updating challenge ${challengeId} progress to ${clampedProgress}%`);
+  
+  return clampedProgress;
+};
+
+/**
+ * Calculate and update challenge progress automatically
+ * @param {Object} challenge - Challenge object
+ * @returns {Object} Updated challenge with progress
+ */
+export const calculateAndUpdateProgress = (challenge) => {
+  const challengeProgress = require('../utils/challengeProgress');
+  return challengeProgress.updateChallengeProgress(challenge);
 };
 
 export default {

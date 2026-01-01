@@ -4,11 +4,23 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../assets/colors';
 import useStore from '../state/store';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Responsive font size function
+const scaleFontSize = (size) => {
+  const scale = SCREEN_WIDTH / 375; // Base width (iPhone X)
+  return Math.max(12, Math.min(size * scale, size * 1.2));
+};
+
 function ChallengeHistoryScreen() {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const completedChallenges = useStore((state) => state.completedChallenges);
 
   const formatDate = (dateString) => {
@@ -35,10 +47,13 @@ function ChallengeHistoryScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Challenge History</Text>
-        <Text style={styles.subtitle}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.colors.background }]} 
+      contentContainerStyle={styles.content}
+    >
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 20) }]}>
+        <Text style={[styles.title, { color: theme.colors.onSurface }]}>Challenge History</Text>
+        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
           {completedChallenges.length} challenge{completedChallenges.length !== 1 ? 's' : ''} completed
         </Text>
       </View>
@@ -46,17 +61,17 @@ function ChallengeHistoryScreen() {
       {completedChallenges.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>📋</Text>
-          <Text style={styles.emptyTitle}>No completed challenges yet</Text>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyTitle, { color: theme.colors.onSurface }]}>No completed challenges yet</Text>
+          <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
             Complete your first challenge to see it here!
           </Text>
         </View>
       ) : (
         <View style={styles.challengesList}>
           {completedChallenges.map((challenge, index) => (
-            <View key={challenge.id || index} style={styles.challengeCard}>
+            <View key={challenge.id || index} style={[styles.challengeCard, { backgroundColor: theme.colors.surface }]}>
               <View style={styles.challengeHeader}>
-                <Text style={styles.challengeTitle}>{challenge.title || 'Challenge'}</Text>
+                <Text style={[styles.challengeTitle, { color: theme.colors.onSurface }]}>{challenge.title || 'Challenge'}</Text>
                 <View
                   style={[
                     styles.difficultyBadge,
@@ -70,7 +85,7 @@ function ChallengeHistoryScreen() {
               </View>
 
               {challenge.description && (
-                <Text style={styles.challengeDescription} numberOfLines={2}>
+                <Text style={[styles.challengeDescription, { color: theme.colors.onSurfaceVariant }]} numberOfLines={2}>
                   {challenge.description}
                 </Text>
               )}
@@ -78,12 +93,12 @@ function ChallengeHistoryScreen() {
               <View style={styles.challengeFooter}>
                 <View style={styles.challengeMeta}>
                   {challenge.duration && (
-                    <Text style={styles.metaText}>
+                    <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>
                       {challenge.duration} day{challenge.duration !== 1 ? 's' : ''}
                     </Text>
                   )}
                   {challenge.completedAt && (
-                    <Text style={styles.metaText}>
+                    <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>
                       • Completed {formatDate(challenge.completedAt)}
                     </Text>
                   )}
@@ -100,23 +115,23 @@ function ChallengeHistoryScreen() {
       {/* Stats Summary */}
       {completedChallenges.length > 0 && (
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Your Achievements</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Your Achievements</Text>
           <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{completedChallenges.length}</Text>
-              <Text style={styles.statLabel}>Total Completed</Text>
+            <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statNumber, { color: theme.colors.primary }]}>{completedChallenges.length}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>Total Completed</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>
+            <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statNumber, { color: theme.colors.primary }]}>
                 {completedChallenges.filter(c => c.difficulty?.toLowerCase() === 'hard').length}
               </Text>
-              <Text style={styles.statLabel}>Hard Challenges</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>Hard Challenges</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>
+            <View style={[styles.statBox, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statNumber, { color: theme.colors.primary }]}>
                 {completedChallenges.reduce((sum, c) => sum + (c.duration || 0), 0)}
               </Text>
-              <Text style={styles.statLabel}>Total Days</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>Total Days</Text>
             </View>
           </View>
         </View>
@@ -128,24 +143,24 @@ function ChallengeHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundLight,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
+    paddingBottom: 20,
   },
   header: {
-    marginTop: 10,
-    marginBottom: 30,
+    marginBottom: Math.max(SCREEN_WIDTH * 0.08, 24),
+    paddingHorizontal: Math.max(SCREEN_WIDTH * 0.053, 16),
   },
   title: {
-    fontSize: 32,
+    fontSize: scaleFontSize(32),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.textLight,
+    fontSize: scaleFontSize(16),
+    lineHeight: scaleFontSize(22),
   },
   emptyState: {
     flex: 1,
@@ -159,14 +174,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: scaleFontSize(20),
     fontWeight: '600',
-    color: colors.text,
     marginBottom: 10,
   },
   emptyText: {
-    fontSize: 16,
-    color: colors.textLight,
+    fontSize: scaleFontSize(16),
     textAlign: 'center',
   },
   challengesList: {
@@ -174,7 +187,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   challengeCard: {
-    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
@@ -194,9 +206,8 @@ const styles = StyleSheet.create({
   },
   challengeTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: scaleFontSize(20),
     fontWeight: 'bold',
-    color: colors.text,
     marginRight: 12,
   },
   difficultyBadge: {
@@ -210,10 +221,9 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   challengeDescription: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: scaleFontSize(14),
     marginBottom: 16,
-    lineHeight: 20,
+    lineHeight: scaleFontSize(20),
   },
   challengeFooter: {
     flexDirection: 'row',
@@ -226,8 +236,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   metaText: {
-    fontSize: 12,
-    color: colors.textLight,
+    fontSize: scaleFontSize(12),
     marginRight: 8,
   },
   completedBadge: {
@@ -246,9 +255,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: scaleFontSize(20),
     fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 16,
   },
   statsGrid: {
@@ -257,20 +265,17 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: scaleFontSize(24),
     fontWeight: 'bold',
-    color: colors.primary,
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
-    color: colors.textLight,
+    fontSize: scaleFontSize(12),
     textAlign: 'center',
   },
 });

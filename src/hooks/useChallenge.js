@@ -5,8 +5,9 @@
 
 import { useCallback } from 'react';
 import useStore from '../state/store';
-import { challengeActions } from '../state/actions';
+import { challengeActions, streakActions } from '../state/actions';
 import { generateChallenge } from '../services/challengeService';
+import { updateChallengeProgress } from '../utils/challengeProgress';
 
 /**
  * Custom hook for managing challenges
@@ -35,10 +36,31 @@ export const useChallenge = () => {
 
   const completeChallenge = useCallback((challengeId) => {
     challengeActions.completeChallenge(challengeId);
+    // Increment streak when challenge is completed
+    streakActions.incrementStreak();
   }, []);
 
   const clearActiveChallenge = useCallback(() => {
     challengeActions.clearActiveChallenge();
+  }, []);
+
+  const updateProgress = useCallback((challengeId, progress) => {
+    challengeActions.updateChallengeProgress(challengeId, progress);
+  }, []);
+
+  const updateProgressAutomatically = useCallback((challenge) => {
+    if (!challenge) return;
+    const updatedChallenge = updateChallengeProgress(challenge);
+    if (updatedChallenge.progress !== challenge.progress) {
+      challengeActions.updateChallengeProgress(challenge.id, updatedChallenge.progress);
+      
+      // If challenge completed, increment streak
+      if (updatedChallenge.status === 'completed' && challenge.status !== 'completed') {
+        streakActions.incrementStreak();
+        challengeActions.completeChallenge(challenge.id);
+      }
+    }
+    return updatedChallenge;
   }, []);
 
   return {
@@ -49,6 +71,8 @@ export const useChallenge = () => {
     setActiveChallenge,
     completeChallenge,
     clearActiveChallenge,
+    updateProgress,
+    updateProgressAutomatically,
   };
 };
 

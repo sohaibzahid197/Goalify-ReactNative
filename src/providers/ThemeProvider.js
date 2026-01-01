@@ -1,13 +1,14 @@
 /**
  * Theme Provider
  * Manages app theme (light/dark mode) with React Native Paper
+ * Now synced with Zustand store for consistent theme management
  */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { lightTheme, darkTheme } from '../assets/theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import useStore from '../state/store';
 
 const ThemeContext = createContext({
     isDarkMode: false,
@@ -19,42 +20,24 @@ export const useAppTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }) => {
     const systemColorScheme = useColorScheme();
-    const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === 'dark');
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Load saved theme preference
-    useEffect(() => {
-        loadThemePreference();
-    }, []);
-
-    const loadThemePreference = async () => {
-        try {
-            const savedTheme = await AsyncStorage.getItem('theme');
-            if (savedTheme !== null) {
-                setIsDarkMode(savedTheme === 'dark');
-            }
-        } catch (error) {
-            console.error('Error loading theme preference:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const toggleTheme = async () => {
-        try {
-            const newTheme = !isDarkMode;
-            setIsDarkMode(newTheme);
-            await AsyncStorage.setItem('theme', newTheme ? 'dark' : 'light');
-        } catch (error) {
-            console.error('Error saving theme preference:', error);
-        }
+    const settings = useStore((state) => state.settings);
+    const updateSettings = useStore((state) => state.updateSettings);
+    
+    // Calculate if dark mode should be active
+    // Priority: settings.theme > system preference
+    const isDarkMode = useMemo(() => {
+        if (settings.theme === 'dark') return true;
+        if (settings.theme === 'light') return false;
+        // If no theme set or theme is 'system', use system preference
+        return systemColorScheme === 'dark';
+    }, [settings.theme, systemColorScheme]);
+    
+    const toggleTheme = () => {
+        const newTheme = isDarkMode ? 'light' : 'dark';
+        updateSettings({ theme: newTheme });
     };
 
     const theme = isDarkMode ? darkTheme : lightTheme;
-
-    if (isLoading) {
-        return null; // Or a loading screen
-    }
 
     return (
         <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme }}>

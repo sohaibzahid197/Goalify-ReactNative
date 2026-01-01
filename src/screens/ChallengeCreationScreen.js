@@ -9,6 +9,7 @@ import { useTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Input, Button, Card } from '../components';
 import { useChallenge } from '../hooks/useChallenge';
+import { validateGoal } from '../utils/validation';
 
 function ChallengeCreationScreen({ navigation }) {
   const theme = useTheme();
@@ -18,6 +19,7 @@ function ChallengeCreationScreen({ navigation }) {
   const [difficulty, setDifficulty] = useState('medium');
   const [duration, setDuration] = useState(7);
   const [loading, setLoading] = useState(false);
+  const [goalError, setGoalError] = useState('');
 
   const difficulties = [
     { value: 'easy', label: 'Easy', description: 'Perfect for beginners', icon: 'speedometer-slow' },
@@ -27,16 +29,24 @@ function ChallengeCreationScreen({ navigation }) {
 
   const durations = [7, 14, 30];
 
+  const handleGoalChange = (text) => {
+    setGoal(text);
+    setGoalError('');
+  };
+
   const handleCreateChallenge = async () => {
-    if (!goal.trim()) {
-      Alert.alert('Error', 'Please enter a goal for your challenge');
+    // Validate goal
+    const validation = validateGoal(goal);
+    if (!validation.isValid) {
+      setGoalError(validation.error);
+      Alert.alert('Validation Error', validation.error);
       return;
     }
 
     setLoading(true);
     try {
       await createChallenge({
-        goal: goal.trim(),
+        goal: validation.value,
         difficulty,
         duration,
       });
@@ -87,10 +97,11 @@ function ChallengeCreationScreen({ navigation }) {
           label="What's your goal?"
           placeholder="e.g., Run 5km daily, Learn Spanish, Read 30 minutes"
           value={goal}
-          onChangeText={setGoal}
+          onChangeText={handleGoalChange}
           leftIcon="target"
           maxLength={100}
           showCounter
+          error={goalError}
         />
 
         {/* Difficulty Selection */}
