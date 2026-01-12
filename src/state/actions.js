@@ -88,8 +88,8 @@ export const challengeActions = {
     }
   },
   clearActiveChallenge: () => useStore.getState().setActiveChallenge(null),
-  updateChallengeProgress: (challengeId, progress) => {
-    useStore.getState().updateChallengeProgress(challengeId, progress);
+  updateChallengeProgress: (challengeId, progress, updatedChallenge = null) => {
+    useStore.getState().updateChallengeProgress(challengeId, progress, updatedChallenge);
   },
 };
 

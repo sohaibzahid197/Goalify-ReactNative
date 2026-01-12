@@ -48,18 +48,43 @@ export const useChallenge = () => {
     challengeActions.updateChallengeProgress(challengeId, progress);
   }, []);
 
-  const updateProgressAutomatically = useCallback((challenge) => {
-    if (!challenge) return;
-    const updatedChallenge = updateChallengeProgress(challenge);
-    if (updatedChallenge.progress !== challenge.progress) {
-      challengeActions.updateChallengeProgress(challenge.id, updatedChallenge.progress);
+  const updateProgressAutomatically = useCallback((challenge, activityTracking = null, dailyGoal = null) => {
+    if (!challenge) return challenge;
+    
+    // Use the fixed updateChallengeProgress with activity tracking
+    const updatedChallenge = updateChallengeProgress(challenge, activityTracking, dailyGoal);
+    
+    // Check if challenge changed (progress, completions, milestones, status)
+    const challengeChanged = 
+      updatedChallenge.progress !== challenge.progress ||
+      JSON.stringify(updatedChallenge.dailyCompletions) !== JSON.stringify(challenge.dailyCompletions) ||
+      JSON.stringify(updatedChallenge.milestonesReached) !== JSON.stringify(challenge.milestonesReached) ||
+      updatedChallenge.status !== challenge.status;
+    
+    if (challengeChanged) {
+      // Update in store with full updated challenge object (preserves dailyCompletions, milestones, etc.)
+      challengeActions.updateChallengeProgress(
+        challenge.id, 
+        updatedChallenge.progress, 
+        updatedChallenge
+      );
       
-      // If challenge completed, increment streak
+      // Handle new milestones for celebration
+      if (updatedChallenge.newMilestones && updatedChallenge.newMilestones.length > 0) {
+        updatedChallenge.newMilestones.forEach(milestone => {
+          console.log(`🎉 Milestone reached: ${milestone.message}`);
+          // TODO: Trigger milestone celebration
+        });
+      }
+      
+      // If challenge completed, increment streak and complete challenge
       if (updatedChallenge.status === 'completed' && challenge.status !== 'completed') {
         streakActions.incrementStreak();
         challengeActions.completeChallenge(challenge.id);
+        // TODO: Trigger challenge completion celebration
       }
     }
+    
     return updatedChallenge;
   }, []);
 

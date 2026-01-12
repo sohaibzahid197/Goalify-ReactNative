@@ -21,7 +21,7 @@ function SplashScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={GRADIENTS.headerGradient}
+      colors={GRADIENTS?.headerGradient || ['#06b6d4', '#0891b2', '#0e7490']}
       style={styles.container}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}

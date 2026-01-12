@@ -11,6 +11,7 @@ import colors from '../assets/colors';
 import useStore from '../state/store';
 import { userActions, settingsActions } from '../state/actions';
 import { validateAge, validateEmail, validateName } from '../utils/validation';
+import { calculateStrideFromHeight } from '../utils/activityCalculations';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -32,9 +33,17 @@ function SettingsScreen() {
   const [lifeSituation, setLifeSituation] = useState(user.lifeSituation || '');
   const [difficultyPreference, setDifficultyPreference] = useState(user.difficultyPreference || settings.difficultyPreference || 'medium');
   
+  // Fitness profile
+  const [weight, setWeight] = useState(user.weight?.toString() || '');
+  const [height, setHeight] = useState(user.height?.toString() || '');
+  const [dailyStepGoal, setDailyStepGoal] = useState(user.dailyStepGoal?.toString() || '10000');
+  
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [ageError, setAgeError] = useState('');
+  const [weightError, setWeightError] = useState('');
+  const [heightError, setHeightError] = useState('');
+  const [goalError, setGoalError] = useState('');
 
   const handleNameChange = (text) => {
     setName(text);
@@ -80,6 +89,44 @@ function SettingsScreen() {
       }
     }
 
+    // Validate weight (if provided)
+    let weightValue = null;
+    if (weight && weight.trim() !== '') {
+      const weightNum = parseFloat(weight);
+      if (isNaN(weightNum) || weightNum <= 0 || weightNum > 300) {
+        setWeightError('Weight must be between 1 and 300 kg');
+        Alert.alert('Validation Error', 'Weight must be between 1 and 300 kg');
+        return;
+      }
+      weightValue = weightNum;
+    }
+
+    // Validate height (if provided)
+    let heightValue = null;
+    if (height && height.trim() !== '') {
+      const heightNum = parseFloat(height);
+      if (isNaN(heightNum) || heightNum <= 0 || heightNum > 300) {
+        setHeightError('Height must be between 1 and 300 cm');
+        Alert.alert('Validation Error', 'Height must be between 1 and 300 cm');
+        return;
+      }
+      heightValue = heightNum;
+    }
+
+    // Calculate stride length from height if height is provided
+    let strideLength = user.strideLength;
+    if (heightValue) {
+      strideLength = calculateStrideFromHeight(heightValue);
+    }
+
+    // Validate daily step goal
+    const goalNum = parseInt(dailyStepGoal, 10);
+    if (isNaN(goalNum) || goalNum <= 0 || goalNum > 100000) {
+      setGoalError('Daily step goal must be between 1 and 100,000 steps');
+      Alert.alert('Validation Error', 'Daily step goal must be between 1 and 100,000 steps');
+      return;
+    }
+
     // Save to store (will be persisted automatically)
     userActions.updateUser({
       name: nameValidation.value,
@@ -88,6 +135,10 @@ function SettingsScreen() {
       gender,
       lifeSituation,
       difficultyPreference,
+      weight: weightValue,
+      height: heightValue,
+      strideLength,
+      dailyStepGoal: goalNum,
     });
     
     Alert.alert('Success', 'Profile updated successfully!');
@@ -190,6 +241,77 @@ function SettingsScreen() {
 
         <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
           <Text style={styles.saveButtonText}>Save Profile</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Fitness Profile Section */}
+      <View style={[styles.section, { backgroundColor: theme.colors.surface }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Fitness Profile</Text>
+        <Text style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
+          Set your fitness metrics for accurate activity calculations
+        </Text>
+        
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Weight (kg)</Text>
+          <TextInput
+            style={[styles.input, weightError && styles.inputError]}
+            placeholder="Enter your weight in kg"
+            placeholderTextColor={colors.textLight}
+            value={weight}
+            onChangeText={(text) => {
+              setWeight(text);
+              setWeightError('');
+            }}
+            keyboardType="decimal-pad"
+          />
+          {weightError ? (
+            <Text style={styles.errorText}>{weightError}</Text>
+          ) : null}
+          <Text style={styles.inputHint}>Used for calories calculation</Text>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Height (cm)</Text>
+          <TextInput
+            style={[styles.input, heightError && styles.inputError]}
+            placeholder="Enter your height in cm"
+            placeholderTextColor={colors.textLight}
+            value={height}
+            onChangeText={(text) => {
+              setHeight(text);
+              setHeightError('');
+            }}
+            keyboardType="numeric"
+          />
+          {heightError ? (
+            <Text style={styles.errorText}>{heightError}</Text>
+          ) : null}
+          <Text style={styles.inputHint}>
+            Used to calculate stride length: {height ? `${calculateStrideFromHeight(parseFloat(height) || 175).toFixed(2)} m` : '0.75 m (default)'}
+          </Text>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Daily Step Goal</Text>
+          <TextInput
+            style={[styles.input, goalError && styles.inputError]}
+            placeholder="Enter daily step goal"
+            placeholderTextColor={colors.textLight}
+            value={dailyStepGoal}
+            onChangeText={(text) => {
+              setDailyStepGoal(text);
+              setGoalError('');
+            }}
+            keyboardType="numeric"
+          />
+          {goalError ? (
+            <Text style={styles.errorText}>{goalError}</Text>
+          ) : null}
+          <Text style={styles.inputHint}>Default: 10,000 steps per day</Text>
+        </View>
+
+        <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
+          <Text style={styles.saveButtonText}>Save Fitness Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -333,7 +455,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: scaleFontSize(20),
     fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  sectionDescription: {
+    fontSize: scaleFontSize(14),
     marginBottom: 20,
+    lineHeight: scaleFontSize(20),
   },
   inputGroup: {
     marginBottom: 20,
@@ -362,6 +489,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: colors.textLight,
+    marginTop: 4,
+    marginLeft: 4,
+    fontStyle: 'italic',
   },
   saveButton: {
     backgroundColor: colors.primary,

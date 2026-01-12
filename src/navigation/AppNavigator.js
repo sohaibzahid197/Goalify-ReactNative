@@ -19,6 +19,7 @@ import StreakScreen from '../screens/StreakScreen';
 import ChallengeHistoryScreen from '../screens/ChallengeHistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ChallengeCreationScreen from '../screens/ChallengeCreationScreen';
+import ChallengeDetailsScreen from '../screens/ChallengeDetailsScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -231,6 +232,17 @@ function AppNavigator() {
             gestureResponseDistance: 200,
             presentation: Platform.OS === 'ios' ? 'modal' : 'card',
             animationTypeForReplace: 'push',
+          }}
+        />
+
+        <Stack.Screen
+          name="ChallengeDetails"
+          component={ChallengeDetailsScreen}
+          options={{
+            headerShown: false,
+            gestureEnabled: true,
+            gestureResponseDistance: 200,
+            presentation: Platform.OS === 'ios' ? 'card' : 'card',
           }}
         />
       </Stack.Navigator>

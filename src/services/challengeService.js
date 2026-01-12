@@ -1,186 +1,110 @@
 /**
  * Challenge Service
- * Handles OpenAI API integration for challenge generation
+ * Handles challenge generation using local templates (no API needed)
  */
 
-// OpenAI API Configuration
-// NOTE: Set your OpenAI API key as an environment variable or replace the placeholder
-// For React Native, you can use react-native-config or similar package
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY_HERE';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+import { getChallengeTemplate, getAllChallengeTemplates, getSuggestedChallenges } from '../data/challengeTemplates';
 
 /**
- * Generate a challenge using OpenAI API
+ * Generate a challenge from template or custom goal
  * @param {Object} params - Challenge generation parameters
- * @param {string} params.goal - The goal for which to generate a challenge
+ * @param {string} params.templateId - Template ID to use (optional)
+ * @param {string} params.goal - Custom goal text (optional, if no templateId)
  * @param {string} params.difficulty - Difficulty level ('easy', 'medium', 'hard')
  * @param {number} params.duration - Duration in days
- * @param {string} params.userContext - Additional context about the user
+ * @param {string} params.category - Challenge category ('fitness', 'health', 'wellness')
  * @returns {Promise<Object>} Generated challenge object
  */
 export const generateChallenge = async ({
+  templateId,
   goal,
   difficulty = 'medium',
   duration = 7,
-  userContext = '',
+  category = 'fitness',
 }) => {
   try {
-    const prompt = `Generate a ${difficulty} challenge for the following goal: "${goal}". 
-    The challenge should last ${duration} days. 
-    ${userContext ? `User context: ${userContext}` : ''}
-    
-    Return a JSON object with the following structure:
-    {
-      "title": "Challenge title",
-      "description": "Detailed description of the challenge",
-      "duration": ${duration},
-      "difficulty": "${difficulty}",
-      "dailyTasks": ["task1", "task2", "task3"],
-      "milestones": ["milestone1", "milestone2"],
-      "tips": ["tip1", "tip2", "tip3"]
-    }`;
+    // If templateId is provided, use the template
+    if (templateId) {
+      const template = getChallengeTemplate(templateId);
+      if (template) {
+        return {
+          ...template,
+          id: `challenge_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          status: 'active',
+          progress: 0,
+          dailyCompletions: {},
+          dailyTaskCompletions: {},
+          dailyActivityHistory: {}, // Store daily activity values
+          milestonesReached: [],
+          points: 0,
+        };
+      }
+    }
 
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that generates personalized challenges for goal achievement. Always respond with valid JSON only.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
+    // If custom goal is provided, create a custom challenge
+    if (goal) {
+      return {
+        id: `challenge_${Date.now()}`,
+        title: `${goal} Challenge`,
+        description: `A ${difficulty} challenge to help you achieve your goal: ${goal}`,
+        category: category || 'wellness',
+        difficulty,
+        duration,
+        activityType: 'consistency', // Default for custom challenges
+        dailyTasks: [
+          'Work on your goal daily',
+          'Track your progress',
+          'Stay consistent',
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    });
-
-    if (!response.ok) {
-      // Get detailed error information
-      // Read response as text first (can only read once)
-      let errorMessage = `OpenAI API error: ${response.status} ${response.statusText || 'Unknown error'}`;
-      try {
-        const errorText = await response.text();
-        if (errorText) {
-          try {
-            // Try to parse as JSON
-            const errorData = JSON.parse(errorText);
-            if (errorData.error) {
-              errorMessage = `OpenAI API error (${response.status}): ${errorData.error.message || errorData.error.type || 'Unknown error'}`;
-              if (errorData.error.code) {
-                errorMessage += ` [Code: ${errorData.error.code}]`;
-              }
-            } else {
-              errorMessage = `OpenAI API error (${response.status}): ${errorText.substring(0, 200)}`;
-            }
-          } catch (jsonError) {
-            // Not JSON, use text as is
-            errorMessage = `OpenAI API error (${response.status}): ${errorText.substring(0, 200)}`;
-          }
-        }
-      } catch (textError) {
-        // If we can't read the response body, use status
-        errorMessage = `OpenAI API error: ${response.status} ${response.statusText || 'Request failed'}`;
-      }
-      throw new Error(errorMessage);
+        milestones: [
+          { day: Math.floor(duration * 0.3), message: `Making progress on ${goal}! 🔥`, badge: 'bronze' },
+          { day: Math.floor(duration * 0.5), message: 'Halfway there! 💪', badge: 'silver' },
+          { day: duration, message: 'Challenge complete! 🎉', badge: 'gold' },
+        ],
+        tips: [
+          'Stay consistent',
+          'Celebrate small wins',
+          'Track your progress daily',
+          'Don\'t be too hard on yourself',
+        ],
+        createdAt: new Date().toISOString(),
+        status: 'active',
+        progress: 0,
+        dailyCompletions: {},
+        dailyTaskCompletions: {},
+        dailyActivityHistory: {}, // Store daily activity values
+        milestonesReached: [],
+        points: 0,
+      };
     }
 
-    const data = await response.json();
-    
-    // Check if response has the expected structure
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response format from OpenAI API');
-    }
-    
-    const challengeText = data.choices[0].message.content;
-    
-    if (!challengeText) {
-      throw new Error('Empty response from OpenAI API');
-    }
-    
-    // Parse the JSON response
-    let challenge;
-    try {
-      challenge = JSON.parse(challengeText);
-    } catch (parseError) {
-      // Try to extract JSON from markdown code blocks if present
-      const jsonMatch = challengeText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        challenge = JSON.parse(jsonMatch[1]);
-      } else {
-        throw new Error(`Failed to parse JSON response: ${parseError.message}`);
-      }
-    }
-    
-    // Add metadata
-    return {
-      ...challenge,
-      id: `challenge_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      status: 'active',
-      progress: 0,
-    };
+    // Default fallback
+    throw new Error('Either templateId or goal must be provided');
   } catch (error) {
-    // Enhanced error logging
     console.error('Error generating challenge:', error);
-    console.error('Error details:', {
-      message: error.message,
-      name: error.name,
-      goal: goal,
-      difficulty: difficulty,
-      duration: duration,
-      apiKeyPresent: !!OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE',
-    });
-    
-    // Return a fallback challenge if API fails
-    return {
-      id: `challenge_${Date.now()}`,
-      title: `${goal} Challenge`,
-      description: `A ${difficulty} challenge to help you achieve your goal: ${goal}`,
-      duration,
-      difficulty,
-      dailyTasks: [
-        'Set aside time each day to work on your goal',
-        'Track your progress daily',
-        'Reflect on your achievements',
-      ],
-      milestones: [
-        `Complete first week of ${goal}`,
-        `Reach halfway point`,
-      ],
-      tips: [
-        'Stay consistent',
-        'Celebrate small wins',
-        'Don\'t be too hard on yourself',
-      ],
-      createdAt: new Date().toISOString(),
-      status: 'active',
-      progress: 0,
-    };
+    throw error;
   }
 };
 
 /**
- * Generate multiple challenge options
- * @param {Object} params - Challenge generation parameters
- * @returns {Promise<Array>} Array of challenge options
+ * Generate multiple challenge options from templates
+ * @param {string} category - Challenge category ('fitness', 'health', 'wellness')
+ * @returns {Promise<Array>} Array of challenge templates
  */
-export const generateChallengeOptions = async (params) => {
-  const difficulties = ['easy', 'medium', 'hard'];
-  const challenges = await Promise.all(
-    difficulties.map(difficulty =>
-      generateChallenge({ ...params, difficulty })
-    )
-  );
-  return challenges;
+export const generateChallengeOptions = async (category = 'fitness') => {
+  const { getChallengesByCategory } = require('../data/challengeTemplates');
+  return getChallengesByCategory(category) || [];
+};
+
+/**
+ * Get suggested challenges based on user activity
+ * @param {Object} userActivity - Current user activity data
+ * @param {number} dailyGoal - User's daily step goal
+ * @returns {Array} Array of suggested challenge templates
+ */
+export const getSuggestedChallengesForUser = (userActivity, dailyGoal) => {
+  return getSuggestedChallenges(userActivity, dailyGoal);
 };
 
 /**

@@ -9,3 +9,10 @@ export { default as Badge } from './Badge';
 export { default as ProgressRing } from './ProgressRing';
 export { default as Input } from './Input';
 export { default as LottieAnimation } from './LottieAnimation';
+export { StepCounterCard } from './StepCounterCard';
+
+// Chart Components
+export { default as AnimatedCounter } from './charts/AnimatedCounter';
+export { default as WeeklyProgressChart } from './charts/WeeklyProgressChart';
+export { default as MonthlyTrendChart } from './charts/MonthlyTrendChart';
+export { default as MiniProgressChart } from './charts/MiniProgressChart';
