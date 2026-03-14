@@ -1,235 +1,281 @@
 /**
  * Onboarding Step 3: Main Goals
+ * Premium redesign with gradient header, animated progress, and goal chips
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Animated,
+  Dimensions,
+  Platform,
+} from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../assets/colors';
 import { validateGoals } from '../utils/validation';
 import useStore from '../state/store';
+
+const { width } = Dimensions.get('window');
+const TOTAL_STEPS = 4;
+const CURRENT_STEP = 3;
 
 function OnboardingStep3({ navigation, route }) {
   const [selectedGoals, setSelectedGoals] = useState([]);
   const onboardingData = route.params?.onboardingData || {};
   const updateUser = useStore((state) => state.updateUser);
 
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const formAnim = useRef(new Animated.Value(30)).current;
+  const formOpacity = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+
   const goals = [
-    'Health & Fitness',
-    'Career & Professional',
-    'Financial',
-    'Education & Learning',
-    'Relationships',
-    'Personal Development',
-    'Creative & Hobbies',
-    'Travel & Adventure',
+    { label: 'Health & Fitness', icon: 'heart-pulse', color: '#ef4444' },
+    { label: 'Career & Professional', icon: 'trending-up', color: '#06b6d4' },
+    { label: 'Financial', icon: 'cash-multiple', color: '#10b981' },
+    { label: 'Education & Learning', icon: 'book-open-variant', color: '#8b5cf6' },
+    { label: 'Relationships', icon: 'account-group', color: '#ec4899' },
+    { label: 'Personal Development', icon: 'head-lightbulb', color: '#f97316' },
+    { label: 'Creative & Hobbies', icon: 'palette', color: '#06b6d4' },
+    { label: 'Travel & Adventure', icon: 'airplane', color: '#0891b2' },
   ];
 
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(headerAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.parallel([
+        Animated.timing(formAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(formOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    Animated.timing(progressAnim, {
+      toValue: CURRENT_STEP / TOTAL_STEPS,
+      duration: 800, delay: 300, useNativeDriver: false,
+    }).start();
+
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.3, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [headerAnim, formAnim, formOpacity, progressAnim, pulseAnim]);
+
   const toggleGoal = (goal) => {
+    const wasEmpty = selectedGoals.length === 0;
     if (selectedGoals.includes(goal)) {
       setSelectedGoals(selectedGoals.filter((g) => g !== goal));
     } else {
       setSelectedGoals([...selectedGoals, goal]);
     }
+    if (wasEmpty) {
+      Animated.sequence([
+        Animated.timing(buttonScale, { toValue: 1.05, duration: 150, useNativeDriver: true }),
+        Animated.timing(buttonScale, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]).start();
+    }
   };
 
   const handleNext = () => {
-    // Validate goals
     const validation = validateGoals(selectedGoals);
     if (!validation.isValid) {
       Alert.alert('Validation Error', validation.error);
       return;
     }
-
-    // Save to store
-    updateUser({
-      mainGoals: validation.value,
-    });
-
+    updateUser({ mainGoals: validation.value });
     navigation.navigate('OnboardingStep4', {
-      onboardingData: {
-        ...onboardingData,
-        mainGoals: validation.value,
-      },
+      onboardingData: { ...onboardingData, mainGoals: validation.value },
     });
-  };
-
-  const handleBack = () => {
-    navigation.goBack();
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.stepIndicator}>Step 3 of 4</Text>
-        <Text style={styles.title}>What are your main goals?</Text>
-        <Text style={styles.subtitle}>Select all that apply</Text>
-      </View>
-
-      <View style={styles.form}>
-        <View style={styles.goalsContainer}>
-          {goals.map((goal) => {
-            const isSelected = selectedGoals.includes(goal);
-            return (
-              <TouchableOpacity
-                key={goal}
-                style={[
-                  styles.goalButton,
-                  isSelected && styles.goalButtonSelected,
-                ]}
-                onPress={() => toggleGoal(goal)}
-              >
-                <Text
-                  style={[
-                    styles.goalButtonText,
-                    isSelected && styles.goalButtonTextSelected,
-                  ]}
-                >
-                  {goal}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, selectedGoals.length === 0 && styles.buttonDisabled]}
-          onPress={handleNext}
-          disabled={selectedGoals.length === 0}
+    <View style={styles.container}>
+      <Animated.View style={[styles.headerGradientWrap, { opacity: headerAnim }]}>
+        <LinearGradient
+          colors={['#06b6d4', '#0891b2', '#0e7490']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
         >
-          <Text style={styles.buttonText}>Next</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <View style={styles.decorCircle1} />
+          <View style={styles.decorCircle2} />
+          <View style={styles.emojiBubble}>
+            <Icon name="target" size={32} color="#f97316" />
+          </View>
+          <Text style={styles.headerTitle}>Your Goals</Text>
+          <Text style={styles.headerSubtitle}>Select all areas you want to improve</Text>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <Animated.View style={[styles.progressFill, {
+                width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+              }]} />
+            </View>
+            <View style={styles.progressDots}>
+              {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+                <Animated.View key={i} style={[
+                  styles.progressDot,
+                  i < CURRENT_STEP && styles.progressDotActive,
+                  i === CURRENT_STEP - 1 && { transform: [{ scale: pulseAnim }] },
+                ]} />
+              ))}
+            </View>
+            <Text style={styles.stepText}>Step {CURRENT_STEP} of {TOTAL_STEPS}</Text>
+          </View>
+        </LinearGradient>
+        <View style={styles.headerCurve} />
+      </Animated.View>
+
+      <ScrollView style={styles.flex1} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: formOpacity, transform: [{ translateY: formAnim }] }}>
+          <Text style={styles.sectionTitle}>What are your main goals?</Text>
+          <Text style={styles.hint}>
+            <Icon name="information-outline" size={14} color={colors.textLight} /> Tap to select multiple
+          </Text>
+
+          <View style={styles.goalsGrid}>
+            {goals.map((item) => {
+              const isSelected = selectedGoals.includes(item.label);
+              return (
+                <TouchableOpacity
+                  key={item.label}
+                  activeOpacity={0.7}
+                  onPress={() => toggleGoal(item.label)}
+                >
+                  {isSelected ? (
+                    <LinearGradient
+                      colors={['#06b6d4', '#0891b2']}
+                      style={styles.goalCard}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      <View style={styles.goalIconWrapSelected}>
+                        <Icon name={item.icon} size={24} color="#FFFFFF" />
+                      </View>
+                      <Text style={styles.goalTextSelected}>{item.label}</Text>
+                      <View style={styles.checkBadge}>
+                        <Icon name="check" size={12} color="#06b6d4" />
+                      </View>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.goalCard}>
+                      <View style={[styles.goalIconWrap, { backgroundColor: item.color + '15' }]}>
+                        <Icon name={item.icon} size={24} color={item.color} />
+                      </View>
+                      <Text style={styles.goalText}>{item.label}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {selectedGoals.length > 0 && (
+            <Text style={styles.selectedCount}>
+              {selectedGoals.length} goal{selectedGoals.length > 1 ? 's' : ''} selected
+            </Text>
+          )}
+        </Animated.View>
+      </ScrollView>
+
+      <Animated.View style={[styles.floatingFooter, { transform: [{ scale: buttonScale }] }]}>
+        <View style={styles.footerRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Icon name="arrow-left" size={20} color={colors.text} />
+            <Text style={styles.backBtnText}>Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleNext}
+            disabled={selectedGoals.length === 0}
+            style={styles.flex1}
+          >
+            <LinearGradient
+              colors={selectedGoals.length > 0 ? ['#06b6d4', '#0e7490'] : ['#cbd5e1', '#94a3b8']}
+              style={styles.ctaButton} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.ctaText}>Continue</Text>
+              <Icon name="arrow-right" size={20} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </View>
   );
 }
 
+const CARD_WIDTH = (width - 60) / 2;
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  container: { flex: 1, backgroundColor: '#f0f9ff' },
+  flex1: { flex: 1 },
+  headerGradientWrap: { position: 'relative', zIndex: 1 },
+  headerGradient: { paddingTop: 60, paddingBottom: 40, paddingHorizontal: 24, alignItems: 'center', overflow: 'hidden' },
+  headerCurve: { height: 30, backgroundColor: '#f0f9ff', marginTop: -30, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  decorCircle1: { position: 'absolute', top: -40, right: -40, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.08)' },
+  decorCircle2: { position: 'absolute', bottom: 10, left: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.06)' },
+  emojiBubble: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
+  headerSubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.85)', fontWeight: '500', marginBottom: 20 },
+  progressContainer: { width: '100%', alignItems: 'center' },
+  progressTrack: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 2, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#FFFFFF', borderRadius: 2 },
+  progressDots: { flexDirection: 'row', marginTop: 10, gap: 8 },
+  progressDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)' },
+  progressDotActive: { backgroundColor: '#FFFFFF' },
+  stepText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginTop: 6 },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 140 },
+  sectionTitle: { fontSize: 24, fontWeight: '800', color: colors.text, marginBottom: 6, letterSpacing: -0.3 },
+  hint: { fontSize: 13, color: colors.textLight, marginBottom: 20, fontWeight: '500' },
+  goalsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  goalCard: {
+    width: CARD_WIDTH, backgroundColor: '#FFFFFF',
+    borderRadius: 16, padding: 16, alignItems: 'center',
+    borderWidth: 2, borderColor: '#e2e8f0', position: 'relative',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+    minHeight: 110, justifyContent: 'center',
   },
-  content: {
-    flexGrow: 1,
-    padding: 24,
+  goalIconWrap: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  goalIconWrapSelected: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  goalText: { fontSize: 13, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  goalTextSelected: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+  checkBadge: {
+    position: 'absolute', top: 8, right: 8,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
   },
-  header: {
-    marginTop: 50,
-    marginBottom: 40,
+  selectedCount: {
+    textAlign: 'center', marginTop: 16, fontSize: 14, fontWeight: '600',
+    color: '#06b6d4',
   },
-  stepIndicator: {
-    fontSize: 14,
-    color: colors.textLight,
-    marginBottom: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  floatingFooter: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 16,
+    backgroundColor: 'rgba(240,249,255,0.95)',
   },
-  title: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 12,
-    letterSpacing: -0.5,
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 18, paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 2, borderColor: '#e2e8f0',
   },
-  subtitle: {
-    fontSize: 17,
-    color: colors.textLight,
-    lineHeight: 24,
+  backBtnText: { fontSize: 16, fontWeight: '700', color: colors.text },
+  ctaButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 18, borderRadius: 16, gap: 8,
+    shadowColor: '#06b6d4', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
-  form: {
-    flex: 1,
-  },
-  goalsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 24,
-    gap: 12,
-  },
-  goalButton: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    minWidth: '45%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  goalButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  goalButtonText: {
-    fontSize: 16,
-    color: colors.text,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  goalButtonTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  footer: {
-    flexDirection: 'row',
-    marginTop: 40,
-    marginBottom: 24,
-    gap: 16,
-  },
-  backButton: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  backButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  button: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonDisabled: {
-    backgroundColor: colors.borderLight,
-    opacity: 0.6,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
+  ctaText: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
 });
 
 export default OnboardingStep3;

@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     percentage: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
     },
 });

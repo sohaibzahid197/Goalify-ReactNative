@@ -3,10 +3,11 @@
  * Update user info and preferences
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Dimensions, Alert } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch, Dimensions, Alert, Animated } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import colors from '../assets/colors';
 import useStore from '../state/store';
 import { userActions, settingsActions } from '../state/actions';
@@ -32,18 +33,22 @@ function SettingsScreen() {
   const [gender, setGender] = useState(user.gender || '');
   const [lifeSituation, setLifeSituation] = useState(user.lifeSituation || '');
   const [difficultyPreference, setDifficultyPreference] = useState(user.difficultyPreference || settings.difficultyPreference || 'medium');
-  
+
   // Fitness profile
   const [weight, setWeight] = useState(user.weight?.toString() || '');
   const [height, setHeight] = useState(user.height?.toString() || '');
   const [dailyStepGoal, setDailyStepGoal] = useState(user.dailyStepGoal?.toString() || '10000');
-  
+
   const [nameError, setNameError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [ageError, setAgeError] = useState('');
   const [weightError, setWeightError] = useState('');
   const [heightError, setHeightError] = useState('');
   const [goalError, setGoalError] = useState('');
+
+  // Theme transition animation
+  const themeTransitionAnim = useRef(new Animated.Value(0)).current;
+  const themeOpacityAnim = useRef(new Animated.Value(1)).current;
 
   const handleNameChange = (text) => {
     setName(text);
@@ -148,8 +153,32 @@ function SettingsScreen() {
     settingsActions.toggleNotifications();
   };
 
-  const handleThemeChange = (theme) => {
-    settingsActions.setTheme(theme);
+  const handleThemeChange = (newTheme) => {
+    // Trigger smooth transition animation
+    Animated.sequence([
+      // Fade out current theme
+      Animated.timing(themeOpacityAnim, {
+        toValue: 0.6,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      // Scale animation for visual pop
+      Animated.parallel([
+        Animated.timing(themeTransitionAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(themeOpacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    // Change theme after animation starts
+    settingsActions.setTheme(newTheme);
   };
 
   const handleDifficultyChange = (difficulty) => {
@@ -158,8 +187,14 @@ function SettingsScreen() {
   };
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: theme.colors.background }]} 
+    <Animated.ScrollView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.colors.background,
+          opacity: themeOpacityAnim,
+        }
+      ]}
       contentContainerStyle={styles.content}
     >
       <View style={[styles.header, { paddingTop: Math.max(insets.top + 16, 20) }]}>
@@ -338,12 +373,19 @@ function SettingsScreen() {
           <Text style={styles.settingLabel}>Theme</Text>
           <View style={styles.themeOptions}>
             <TouchableOpacity
+              activeOpacity={0.8}
               style={[
                 styles.themeOption,
                 settings.theme === 'light' && styles.themeOptionSelected,
               ]}
               onPress={() => handleThemeChange('light')}
             >
+              <Icon
+                name="white-balance-sunny"
+                size={20}
+                color={settings.theme === 'light' ? '#FFFFFF' : colors.primary}
+                style={styles.themeIcon}
+              />
               <Text
                 style={[
                   styles.themeOptionText,
@@ -354,12 +396,19 @@ function SettingsScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              activeOpacity={0.8}
               style={[
                 styles.themeOption,
                 settings.theme === 'dark' && styles.themeOptionSelected,
               ]}
               onPress={() => handleThemeChange('dark')}
             >
+              <Icon
+                name="moon-waning-crescent"
+                size={20}
+                color={settings.theme === 'dark' ? '#FFFFFF' : colors.primary}
+                style={styles.themeIcon}
+              />
               <Text
                 style={[
                   styles.themeOptionText,
@@ -413,7 +462,7 @@ function SettingsScreen() {
           <Text style={styles.aboutValue}>1</Text>
         </View>
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -538,10 +587,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: colors.borderLight,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   themeOptionSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+  },
+  themeIcon: {
+    marginRight: 8,
   },
   themeOptionText: {
     fontSize: 16,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { Platform, StyleSheet, Animated } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -26,6 +26,41 @@ const Tab = createBottomTabNavigator();
 
 // Ensure icons are loaded
 Icon.loadFont();
+
+/**
+ * Animated Tab Icon Component
+ * Scales and rotates icon when tab becomes active
+ */
+function AnimatedTabIcon({ name, color, focused }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Animate when focused state changes
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: focused ? 1.3 : 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: focused ? 1.15 : 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [focused, scaleAnim]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Icon
+        name={name}
+        size={24}
+        color={color}
+        style={styles.icon}
+      />
+    </Animated.View>
+  );
+}
 
 /**
  * Main Tab Navigator
@@ -97,7 +132,7 @@ function MainTabs() {
               iconName = focused ? 'home' : 'home-outline';
               break;
             case 'Streak':
-              iconName = focused ? 'fire' : 'fire-outline';
+              iconName = 'fire'; // Always use fire icon, color changes based on focused state
               break;
             case 'ChallengeHistory':
               iconName = focused ? 'history' : 'clock-outline';
@@ -108,12 +143,7 @@ function MainTabs() {
           }
 
           return (
-            <Icon
-              name={iconName}
-              size={24}
-              color={color}
-              style={styles.icon}
-            />
+            <AnimatedTabIcon name={iconName} color={color} focused={focused} />
           );
         },
       })}

@@ -4,6 +4,7 @@
  */
 
 import { getChallengeTemplate, getAllChallengeTemplates, getSuggestedChallenges } from '../data/challengeTemplates';
+import { getFriendlyMilestoneDays } from '../utils/durationFormatter';
 
 /**
  * Generate a challenge from template or custom goal
@@ -23,29 +24,17 @@ export const generateChallenge = async ({
   category = 'fitness',
 }) => {
   try {
+    let baseChallenge;
+    
     // If templateId is provided, use the template
     if (templateId) {
       const template = getChallengeTemplate(templateId);
       if (template) {
-        return {
-          ...template,
-          id: `challenge_${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          status: 'active',
-          progress: 0,
-          dailyCompletions: {},
-          dailyTaskCompletions: {},
-          dailyActivityHistory: {}, // Store daily activity values
-          milestonesReached: [],
-          points: 0,
-        };
+        baseChallenge = { ...template };
       }
-    }
-
-    // If custom goal is provided, create a custom challenge
-    if (goal) {
-      return {
-        id: `challenge_${Date.now()}`,
+    } else if (goal) {
+      // If custom goal is provided, create a custom challenge
+      baseChallenge = {
         title: `${goal} Challenge`,
         description: `A ${difficulty} challenge to help you achieve your goal: ${goal}`,
         category: category || 'wellness',
@@ -57,30 +46,48 @@ export const generateChallenge = async ({
           'Track your progress',
           'Stay consistent',
         ],
-        milestones: [
-          { day: Math.floor(duration * 0.3), message: `Making progress on ${goal}! 🔥`, badge: 'bronze' },
-          { day: Math.floor(duration * 0.5), message: 'Halfway there! 💪', badge: 'silver' },
-          { day: duration, message: 'Challenge complete! 🎉', badge: 'gold' },
-        ],
+        milestones: (() => {
+          const milestoneDays = getFriendlyMilestoneDays(duration);
+          return [
+            { day: milestoneDays.bronze, message: `Making progress on ${goal}! 🔥`, badge: 'bronze' },
+            { day: milestoneDays.silver, message: 'Halfway there! 💪', badge: 'silver' },
+            { day: milestoneDays.gold, message: 'Challenge complete! 🎉', badge: 'gold' },
+          ];
+        })(),
         tips: [
           'Stay consistent',
           'Celebrate small wins',
           'Track your progress daily',
           'Don\'t be too hard on yourself',
         ],
-        createdAt: new Date().toISOString(),
-        status: 'active',
-        progress: 0,
-        dailyCompletions: {},
-        dailyTaskCompletions: {},
-        dailyActivityHistory: {}, // Store daily activity values
-        milestonesReached: [],
-        points: 0,
       };
+    } else {
+      throw new Error('Either templateId or goal must be provided');
     }
 
-    // Default fallback
-    throw new Error('Either templateId or goal must be provided');
+    // Initialize challenge with proper progress structure (object, not number)
+    const challenge = {
+      ...baseChallenge,
+      id: `challenge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      status: 'active',
+      // Progress as object with all required fields for chart compatibility
+      progress: {
+        percentage: 0,
+        dailyBreakdown: [], // Empty array initially - will be populated by updateChallengeProgress
+        currentValue: 0,
+        averageDaily: 0,
+        daysCompleted: 0,
+        weeklyTrend: 'stable',
+      },
+      dailyCompletions: {},
+      dailyTaskCompletions: {},
+      dailyActivityHistory: {},
+      milestonesReached: [],
+      points: 0,
+    };
+
+    return challenge;
   } catch (error) {
     console.error('Error generating challenge:', error);
     throw error;

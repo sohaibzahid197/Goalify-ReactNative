@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { View, TextInput, Text, StyleSheet, Animated } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { scaleFontSize, scaleIcon, scaleSize } from '../utils/responsive';
 
 const Input = ({
     label,
@@ -37,7 +38,13 @@ const Input = ({
     return (
         <View style={[styles.container, style]}>
             {label && (
-                <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+                <Text style={[
+                    styles.label, 
+                    { 
+                        color: theme.colors.onSurface,
+                        fontSize: scaleFontSize(14),
+                    }
+                ]}>
                     {label}
                 </Text>
             )}
@@ -53,7 +60,7 @@ const Input = ({
                 {leftIcon && (
                     <Icon
                         name={leftIcon}
-                        size={20}
+                        size={scaleIcon(20)}
                         color={isFocused ? theme.colors.primary : theme.colors.outline}
                         style={styles.leftIcon}
                     />
@@ -61,7 +68,10 @@ const Input = ({
                 <TextInput
                     style={[
                         styles.input,
-                        { color: theme.colors.onSurface },
+                        { 
+                            color: theme.colors.onSurface,
+                            fontSize: scaleFontSize(16),
+                        },
                         inputStyle,
                     ]}
                     value={value}
@@ -76,19 +86,31 @@ const Input = ({
                 {rightIcon && (
                     <Icon
                         name={rightIcon}
-                        size={20}
+                        size={scaleIcon(20)}
                         color={isFocused ? theme.colors.primary : theme.colors.outline}
                         style={styles.rightIcon}
                     />
                 )}
             </View>
             {hasError && (
-                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                <Text style={[
+                    styles.errorText, 
+                    { 
+                        color: theme.colors.error,
+                        fontSize: scaleFontSize(12),
+                    }
+                ]}>
                     {error}
                 </Text>
             )}
             {showCounter && maxLength && (
-                <Text style={[styles.counter, { color: theme.colors.outline }]}>
+                <Text style={[
+                    styles.counter, 
+                    { 
+                        color: theme.colors.outline,
+                        fontSize: scaleFontSize(12),
+                    }
+                ]}>
                     {value?.length || 0}/{maxLength}
                 </Text>
             )}
@@ -101,9 +123,9 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     label: {
-        fontSize: 14,
         fontWeight: '600',
         marginBottom: 8,
+        // fontSize applied inline with scaleFontSize
     },
     inputContainer: {
         flexDirection: 'row',
@@ -115,7 +137,7 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         paddingVertical: 14,
-        fontSize: 16,
+        // fontSize applied inline with scaleFontSize
     },
     leftIcon: {
         marginRight: 12,
@@ -124,13 +146,13 @@ const styles = StyleSheet.create({
         marginLeft: 12,
     },
     errorText: {
-        fontSize: 12,
         marginTop: 4,
+        // fontSize applied inline with scaleFontSize
     },
     counter: {
-        fontSize: 12,
         marginTop: 4,
         textAlign: 'right',
+        // fontSize applied inline with scaleFontSize
     },
 });
 

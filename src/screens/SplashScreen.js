@@ -1,38 +1,75 @@
 /**
  * Splash Screen
- * Initial loading screen with modern gradient design
+ * Initial loading screen with logo and branding
  */
 
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, Animated } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { GRADIENTS } from '../assets/colors';
-import colors from '../assets/colors';
 
 function SplashScreen({ navigation }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const taglineFade = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    // Animate logo in
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Animate tagline after logo
+      Animated.timing(taglineFade, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
+    });
+
     const timer = setTimeout(() => {
       navigation.replace('OnboardingStep1');
-    }, 2000);
+    }, 2500);
 
     return () => clearTimeout(timer);
-  }, [navigation]);
+  }, [navigation, fadeAnim, scaleAnim, taglineFade]);
 
   return (
     <LinearGradient
-      colors={GRADIENTS?.headerGradient || ['#06b6d4', '#0891b2', '#0e7490']}
+      colors={['#06b6d4', '#0891b2', '#0e7490']}
       style={styles.container}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
       <View style={styles.content}>
-        <View style={styles.logoContainer}>
-          <Icon name="target" size={64} color="#FFFFFF" style={styles.logoIcon} />
-          <Text style={styles.logo}>Goalify</Text>
-        </View>
-        <Text style={styles.tagline}>Achieve Your Goals, One Challenge at a Time</Text>
-        <ActivityIndicator size="large" color="#FFFFFF" style={styles.loader} />
+        <Animated.View
+          style={[
+            styles.logoContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+            },
+          ]}
+        >
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.appName}>Goalify</Text>
+        </Animated.View>
+
+        <Animated.Text style={[styles.tagline, { opacity: taglineFade }]}>
+          Turn Ambition Into Action
+        </Animated.Text>
       </View>
     </LinearGradient>
   );
@@ -50,28 +87,28 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  logoIcon: {
     marginBottom: 16,
   },
   logo: {
-    fontSize: 56,
+    width: 140,
+    height: 140,
+    borderRadius: 32,
+    marginBottom: 20,
+  },
+  appName: {
+    fontSize: 42,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -1,
+    letterSpacing: 1,
   },
   tagline: {
-    fontSize: 18,
+    fontSize: 17,
     color: '#FFFFFF',
-    opacity: 0.95,
-    marginBottom: 50,
+    opacity: 0.9,
+    marginTop: 8,
     textAlign: 'center',
     fontWeight: '500',
-    lineHeight: 26,
-  },
-  loader: {
-    marginTop: 20,
+    letterSpacing: 0.5,
   },
 });
 

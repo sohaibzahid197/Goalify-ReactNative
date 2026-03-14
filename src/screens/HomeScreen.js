@@ -3,21 +3,28 @@
  * Main dashboard showing today's challenge with modern UI
  */
 
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Animated, Modal, Dimensions } from 'react-native';
 import { useTheme } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import LottieView from 'lottie-react-native';
 import useStore from '../state/store';
 import { Card, Button, ProgressRing, Badge, MiniProgressChart } from '../components';
 import StepCounterCard from '../components/StepCounterCard';
 import { GRADIENTS } from '../assets/colors';
 import { streakActions, challengeActions } from '../state/actions';
 import { autoUpdateStreak } from '../utils/streakManager';
-import { updateChallengeProgress, isTodayTargetMet, getNextMilestone, getReachedMilestones } from '../utils/challengeProgress';
+import { updateChallengeProgress, isTodayTargetMet, getNextMilestone, getReachedMilestones, getProgressValue } from '../utils/challengeProgress';
+
+const { width, height } = Dimensions.get('window');
 
 function HomeScreen({ navigation }) {
   const theme = useTheme();
+  const [showAirplaneAnimation, setShowAirplaneAnimation] = useState(false);
+  const lottieRef = useRef(null);
+
   const activeChallenge = useStore((state) => state.activeChallenge);
   const streak = useStore((state) => state.streak);
   const user = useStore((state) => state.user);
@@ -25,10 +32,34 @@ function HomeScreen({ navigation }) {
   const updateStreak = useStore((state) => state.updateStreak);
   const setActiveChallenge = useStore((state) => state.setActiveChallenge);
 
-  // Debug: Log activeChallenge
+  // Refresh when screen comes into focus (after returning from ChallengeCreation)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🏠 HomeScreen focused - checking for challenge');
+      const currentState = useStore.getState();
+      console.log('📊 Current activeChallenge:', currentState.activeChallenge?.id, currentState.activeChallenge?.title);
+      console.log('📊 Active Challenge Full Data:', JSON.stringify(currentState.activeChallenge));
+      console.log('📋 Total challenges in store:', currentState.challenges.length);
+
+      // CRITICAL FIX: Force re-render by creating a NEW object reference
+      // This ensures the component updates when returning from ChallengeCreation
+      // Zustand needs a NEW reference to detect changes and trigger re-render
+      if (currentState.activeChallenge) {
+        console.log('✅ Challenge found, triggering component update with new reference');
+        // Create a new object reference by spreading to force Zustand re-render
+        setActiveChallenge({ ...currentState.activeChallenge });
+      }
+
+      return () => {
+        console.log('🏠 HomeScreen unfocused');
+      };
+    }, [setActiveChallenge])
+  );
+
+  // Debug: Log activeChallenge on changes
   React.useEffect(() => {
-    console.log('HomeScreen - activeChallenge:', activeChallenge);
-    console.log('HomeScreen - challenges:', useStore.getState().challenges);
+    console.log('🔄 HomeScreen - activeChallenge changed:', activeChallenge?.id, activeChallenge?.title);
+    console.log('🔄 HomeScreen - challenges:', useStore.getState().challenges);
   }, [activeChallenge]);
 
   // Auto-update streak and challenge progress on mount and when activity changes
@@ -52,38 +83,45 @@ function HomeScreen({ navigation }) {
     if (activeChallenge) {
       try {
         const updatedChallenge = updateChallengeProgress(activeChallenge, activityTracking, user.dailyStepGoal);
-        
+
+        // Extract just the essential fields for storage (avoid storing the transformed progress object)
+        const { newMilestones, ...storeChallenge } = updatedChallenge;
+
+        // Normalize progress back to a number for storage
+        const progressNumber = getProgressValue(storeChallenge.progress);
+        const challengeForStorage = {
+          ...storeChallenge,
+          progress: progressNumber
+        };
+
         // Check if challenge actually changed (progress, completions, milestones, etc.)
-        const challengeChanged = 
-          updatedChallenge.progress !== activeChallenge.progress ||
-          JSON.stringify(updatedChallenge.dailyCompletions) !== JSON.stringify(activeChallenge.dailyCompletions) ||
-          JSON.stringify(updatedChallenge.milestonesReached) !== JSON.stringify(activeChallenge.milestonesReached) ||
-          updatedChallenge.status !== activeChallenge.status;
+        const challengeChanged =
+          challengeForStorage.progress !== activeChallenge.progress ||
+          JSON.stringify(challengeForStorage.dailyCompletions) !== JSON.stringify(activeChallenge.dailyCompletions) ||
+          JSON.stringify(challengeForStorage.milestonesReached) !== JSON.stringify(activeChallenge.milestonesReached) ||
+          challengeForStorage.status !== activeChallenge.status;
 
         if (challengeChanged) {
-          // Update in store with full updated challenge object (preserves dailyCompletions, milestones, etc.)
+          // Update in store with clean challenge data (progress as number, not object)
           challengeActions.updateChallengeProgress(
-            activeChallenge.id, 
-            updatedChallenge.progress, 
-            updatedChallenge
+            activeChallenge.id,
+            progressNumber,
+            challengeForStorage
           );
-          
+
           // Handle milestone celebrations if new milestones reached
-          if (updatedChallenge.newMilestones && updatedChallenge.newMilestones.length > 0) {
-            updatedChallenge.newMilestones.forEach(milestone => {
+          if (newMilestones && newMilestones.length > 0) {
+            newMilestones.forEach(milestone => {
               console.log(`🎉 Milestone reached: ${milestone.message}`);
               // TODO: Show celebration animation/notification
             });
           }
-          
+
           // Handle challenge completion
-          if (updatedChallenge.status === 'completed' && activeChallenge.status !== 'completed') {
+          if (challengeForStorage.status === 'completed' && activeChallenge.status !== 'completed') {
             console.log('🎉 Challenge completed!');
             challengeActions.completeChallenge(activeChallenge.id);
             // TODO: Show celebration animation
-          } else if (updatedChallenge.status !== 'completed') {
-            // Update active challenge with all changes (including dailyCompletions)
-            setActiveChallenge(updatedChallenge);
           }
         }
       } catch (error) {
@@ -92,12 +130,35 @@ function HomeScreen({ navigation }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeChallenge?.id, 
-    activityTracking.todaySteps, 
-    activityTracking.todayCalories, 
+    activeChallenge?.id,
+    activityTracking.todaySteps,
+    activityTracking.todayCalories,
     activityTracking.todayDistance,
     user.dailyStepGoal
   ]); // Watch activity changes for real-time updates
+
+  const handleCreateChallenge = () => {
+    console.log('🎬 Create Challenge button pressed');
+    setShowAirplaneAnimation(true);
+
+    // Play animation manually to ensure it starts
+    setTimeout(() => {
+      console.log('🎬 Playing Lottie animation...');
+      if (lottieRef.current) {
+        lottieRef.current.play();
+        console.log('✅ Animation play() called');
+      } else {
+        console.log('❌ Lottie ref is null');
+      }
+    }, 100);
+
+    // Navigate after animation completes
+    setTimeout(() => {
+      console.log('🎬 Animation complete, navigating to ChallengeCreation');
+      setShowAirplaneAnimation(false);
+      navigation.navigate('ChallengeCreation');
+    }, 3000);
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -120,316 +181,377 @@ function HomeScreen({ navigation }) {
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Header with Gradient */}
-      <LinearGradient
-        colors={GRADIENTS?.headerGradient || ['#06b6d4', '#0891b2', '#0e7490']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+    <>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={styles.content}
       >
-        <View style={styles.headerContent}>
-          <Text style={styles.greeting}>{getGreeting()}! 👋</Text>
-          <Text style={styles.userName}>{user?.name || 'Champion'}</Text>
-          <Text style={styles.subtitle}>Ready to tackle today's challenge?</Text>
-        </View>
-      </LinearGradient>
-
-      {/* Streak Card */}
-      <Card variant="elevated" style={styles.streakCard}>
-        <View style={styles.streakContent}>
-          <View style={styles.streakInfo}>
-            <Text style={[styles.streakLabel, { color: theme.colors.onSurface }]}>
-              Current Streak
-            </Text>
-            <View style={styles.streakValueContainer}>
-              <Text style={[styles.streakValue, { color: theme.colors.primary }]}>
-                {streak.currentStreak}
-              </Text>
-              <Text style={[styles.streakDays, { color: theme.colors.primary }]}>
-                days
-              </Text>
-              <Text style={styles.fireEmoji}>🔥</Text>
-            </View>
-            <Text style={[styles.streakSubtext, { color: theme.colors.outline }]}>
-              Keep it going!
-            </Text>
+        {/* Header with Gradient */}
+        <LinearGradient
+          colors={GRADIENTS?.headerGradient || ['#06b6d4', '#0891b2', '#0e7490']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.greeting}>{getGreeting()}! 👋</Text>
+            <Text style={styles.userName}>{user?.name || 'Champion'}</Text>
+            <Text style={styles.subtitle}>Ready to tackle today's challenge?</Text>
           </View>
-          <ProgressRing
-            progress={(streak.currentStreak / 30) * 100}
-            size={100}
-            strokeWidth={8}
-            color={theme.colors.primary}
-          />
-        </View>
-      </Card>
+        </LinearGradient>
 
-      {/* Daily Challenge Section */}
-      <View style={styles.challengeSection}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-          Today's Challenge
-        </Text>
-
-        {activeChallenge ? (() => {
-          try {
-            // Ensure challenge has required fields
-            if (!activeChallenge.id) {
-              console.warn('Challenge missing ID:', activeChallenge);
-              return null;
-            }
-
-            // Safely calculate progress and other values
-            let updatedChallenge;
-            try {
-              updatedChallenge = updateChallengeProgress(activeChallenge, activityTracking, user.dailyStepGoal) || activeChallenge;
-            } catch (err) {
-              console.error('Error updating challenge progress:', err);
-              updatedChallenge = activeChallenge;
-            }
-
-            let todayMet = false;
-            try {
-              todayMet = isTodayTargetMet(activeChallenge, activityTracking, user.dailyStepGoal);
-            } catch (err) {
-              console.error('Error checking today target:', err);
-            }
-
-            let nextMilestone = null;
-            try {
-              nextMilestone = getNextMilestone(activeChallenge);
-            } catch (err) {
-              console.error('Error getting next milestone:', err);
-            }
-
-            const today = new Date().toISOString().split('T')[0];
-            const dailyTaskCompletions = activeChallenge.dailyTaskCompletions?.[today] || {};
-            
-            return (
-              <Card variant="elevated" style={styles.challengeCard}>
-              <View style={styles.challengeHeader}>
-                <Text style={[styles.challengeTitle, { color: theme.colors.onSurface }]}>
-                  {activeChallenge.title}
-                </Text>
-                <Badge
-                  variant={getDifficultyVariant(activeChallenge.difficulty)}
-                  size="small"
-                >
-                  {activeChallenge.difficulty?.toUpperCase()}
-                </Badge>
-              </View>
-
-              <Text style={[styles.challengeDescription, { color: theme.colors.outline }]}>
-                {activeChallenge.description}
+        {/* Streak Card */}
+        <Card variant="elevated" style={styles.streakCard}>
+          <View style={styles.streakContent}>
+            <View style={styles.streakInfo}>
+              <Text style={[styles.streakLabel, { color: theme.colors.onSurface }]}>
+                Current Streak
               </Text>
-
-              <View style={styles.challengeMeta}>
-                <View style={styles.metaItem}>
-                  <Icon name="calendar" size={16} color={theme.colors.outline} />
-                  <Text style={[styles.metaText, { color: theme.colors.outline }]}>
-                    {activeChallenge.duration || 7} days
-                  </Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Icon name="chart-line" size={16} color={theme.colors.outline} />
-                  <Text style={[styles.metaText, { color: theme.colors.outline }]}>
-                    {Math.round(updatedChallenge.progress || activeChallenge.progress || 0)}% complete
-                  </Text>
-                </View>
-                {todayMet && (
-                  <View style={[styles.metaItem, { backgroundColor: theme.colors.success + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }]}>
-                    <Icon name="check-circle" size={16} color={theme.colors.success} />
-                    <Text style={[styles.metaText, { color: theme.colors.success, marginLeft: 4 }]}>
-                      Today ✓
-                    </Text>
-                  </View>
-                )}
+              <View style={styles.streakValueContainer}>
+                <Text style={[styles.streakValue, { color: theme.colors.primary }]}>
+                  {streak.currentStreak}
+                </Text>
+                <Text style={[styles.streakDays, { color: theme.colors.primary }]}>
+                  days
+                </Text>
+                <Text style={styles.fireEmoji}>🔥</Text>
               </View>
+              <Text style={[styles.streakSubtext, { color: theme.colors.outline }]}>
+                Keep it going!
+              </Text>
+            </View>
+            <ProgressRing
+              progress={(streak.currentStreak / 30) * 100}
+              size={100}
+              strokeWidth={8}
+              color={theme.colors.primary}
+            />
+          </View>
+        </Card>
 
-              <View style={styles.progressBarContainer}>
-                <View
-                  style={[
-                    styles.progressBar,
-                    { backgroundColor: theme.colors.surfaceVariant }
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${Math.min(100, Math.max(0, updatedChallenge.progress || activeChallenge.progress || 0))}%`,
-                        backgroundColor: theme.colors.primary
-                      }
-                    ]}
-                  />
-                </View>
-              </View>
+        {/* Daily Challenge Section */}
+        <View style={styles.challengeSection}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+            Today's Challenge
+          </Text>
 
-              {/* Daily Tasks Preview */}
-              {activeChallenge.dailyTasks && activeChallenge.dailyTasks.length > 0 && (
-                <View style={styles.dailyTasksPreview}>
-                  <Text style={[styles.tasksTitle, { color: theme.colors.onSurface }]}>
-                    Today's Tasks
-                  </Text>
-                  {activeChallenge.dailyTasks.slice(0, 2).map((task, index) => {
-                    const isCompleted = dailyTaskCompletions[index] === true;
-                    return (
-                      <View key={index} style={styles.taskPreviewItem}>
-                        <Icon
-                          name={isCompleted ? "check-circle" : "circle-outline"}
-                          size={18}
-                          color={isCompleted ? theme.colors.success : theme.colors.outline}
-                        />
-                        <Text
-                          style={[
-                            styles.taskPreviewText,
-                            { color: theme.colors.onSurfaceVariant },
-                            isCompleted && { textDecorationLine: 'line-through', opacity: 0.6 }
-                          ]}
-                        >
-                          {task}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                  {activeChallenge.dailyTasks.length > 2 && (
-                    <Text style={[styles.moreTasksText, { color: theme.colors.primary }]}>
-                      +{activeChallenge.dailyTasks.length - 2} more tasks
+          {activeChallenge ? (() => {
+            try {
+              // Ensure challenge has required fields
+              console.log('🎯 Rendering challenge:', {
+                id: activeChallenge.id,
+                title: activeChallenge.title,
+                description: activeChallenge.description,
+                hasTitle: !!activeChallenge.title,
+                hasDescription: !!activeChallenge.description,
+                difficulty: activeChallenge.difficulty,
+                duration: activeChallenge.duration,
+                activityType: activeChallenge.activityType,
+              });
+
+              if (!activeChallenge.id) {
+                console.warn('Challenge missing ID:', activeChallenge);
+                return null;
+              }
+
+              if (!activeChallenge.title || !activeChallenge.description) {
+                console.warn('Challenge missing title or description:', {
+                  title: activeChallenge.title,
+                  description: activeChallenge.description,
+                });
+              }
+
+              // Safely calculate progress and other values
+              let updatedChallenge;
+              try {
+                updatedChallenge = updateChallengeProgress(activeChallenge, activityTracking, user.dailyStepGoal) || activeChallenge;
+              } catch (err) {
+                console.error('Error updating challenge progress:', err);
+                updatedChallenge = activeChallenge;
+              }
+
+              let todayMet = false;
+              try {
+                todayMet = isTodayTargetMet(activeChallenge, activityTracking, user.dailyStepGoal);
+              } catch (err) {
+                console.error('Error checking today target:', err);
+              }
+
+              let nextMilestone = null;
+              try {
+                nextMilestone = getNextMilestone(activeChallenge);
+              } catch (err) {
+                console.error('Error getting next milestone:', err);
+              }
+
+              const today = new Date().toISOString().split('T')[0];
+              const dailyTaskCompletions = activeChallenge.dailyTaskCompletions?.[today] || {};
+
+              console.log('✅ About to render Card with challenge:', activeChallenge.title, 'Progress:', updatedChallenge.progress);
+              console.log('🎨 Theme colors - onSurface:', theme.colors.onSurface, 'outline:', theme.colors.outline, 'background:', theme.colors.background);
+              console.log('📐 Card styles:', styles.challengeCard, 'Title styles:', styles.challengeTitle);
+
+              return (
+                <Card variant="elevated" style={styles.challengeCard}>
+                  <View style={styles.challengeHeader}>
+                    <Text style={[styles.challengeTitle, { color: theme.colors.onSurface }]}>
+                      {(() => {
+                        console.log('📝 Rendering title:', activeChallenge.title);
+                        return activeChallenge.title;
+                      })()}
                     </Text>
-                  )}
-                </View>
-              )}
-
-              {/* Next Milestone Preview */}
-              {nextMilestone && (
-                <View style={styles.milestonePreview}>
-                  <Icon name="trophy-outline" size={20} color={theme.colors.warning || '#FF9800'} />
-                  <Text style={[styles.milestonePreviewText, { color: theme.colors.onSurfaceVariant }]}>
-                    Next: {nextMilestone.message}
-                  </Text>
-                </View>
-              )}
-
-              {/* Mini Weekly Progress Chart - Show always if challenge exists */}
-              {updatedChallenge && (
-                <MiniProgressChart
-                  challenge={updatedChallenge}
-                  onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
-                  style={styles.miniChart}
-                />
-              )}
-
-              <Button
-                variant="primary"
-                size="medium"
-                icon="arrow-right"
-                iconPosition="right"
-                fullWidth
-                onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
-              >
-                View Details
-              </Button>
-            </Card>
-            );
-          } catch (error) {
-            console.error('Error rendering challenge:', error);
-            // Fallback: Show challenge even if there's an error
-            return (
-              <Card variant="elevated" style={styles.challengeCard}>
-                <View style={styles.challengeHeader}>
-                  <Text style={[styles.challengeTitle, { color: theme.colors.onSurface }]}>
-                    {activeChallenge.title || 'Challenge'}
-                  </Text>
-                  {activeChallenge.difficulty && (
                     <Badge
                       variant={getDifficultyVariant(activeChallenge.difficulty)}
                       size="small"
                     >
                       {activeChallenge.difficulty?.toUpperCase()}
                     </Badge>
-                  )}
-                </View>
-                {activeChallenge.description && (
+                  </View>
+
                   <Text style={[styles.challengeDescription, { color: theme.colors.outline }]}>
-                    {activeChallenge.description}
+                    {(() => {
+                      console.log('📝 Rendering description:', activeChallenge.description);
+                      return activeChallenge.description;
+                    })()}
                   </Text>
-                )}
-                <Button
-                  variant="primary"
-                  size="medium"
-                  icon="arrow-right"
-                  iconPosition="right"
-                  fullWidth
-                  onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
-                >
-                  View Details
-                </Button>
-              </Card>
-            );
-          }
-        })() : (
-          <Card variant="outlined" style={styles.emptyChallengeCard}>
-            <Icon
-              name="target"
-              size={64}
-              color={theme.colors.outline}
-              style={styles.emptyIcon}
-            />
-            <Text style={[styles.emptyText, { color: theme.colors.onSurface }]}>
-              No active challenge
+
+                  <View style={styles.challengeMeta}>
+                    <View style={styles.metaItem}>
+                      <Icon name="calendar" size={16} color={theme.colors.outline} />
+                      <Text style={[styles.metaText, { color: theme.colors.outline }]}>
+                        {activeChallenge.duration || 7} days
+                      </Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Icon name="chart-line" size={16} color={theme.colors.outline} />
+                      <Text style={[styles.metaText, { color: theme.colors.outline }]}>
+                        {Math.round(getProgressValue(updatedChallenge.progress) || getProgressValue(activeChallenge.progress) || 0)}% complete
+                      </Text>
+                    </View>
+                    {todayMet && (
+                      <View style={[styles.metaItem, { backgroundColor: theme.colors.success + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }]}>
+                        <Icon name="check-circle" size={16} color={theme.colors.success} />
+                        <Text style={[styles.metaText, { color: theme.colors.success, marginLeft: 4 }]}>
+                          Today ✓
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.progressBarContainer}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        { backgroundColor: theme.colors.surfaceVariant }
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${Math.min(100, Math.max(0, getProgressValue(updatedChallenge.progress) || getProgressValue(activeChallenge.progress) || 0))}%`,
+                            backgroundColor: theme.colors.primary
+                          }
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Daily Tasks Preview */}
+                  {activeChallenge.dailyTasks && activeChallenge.dailyTasks.length > 0 && (
+                    <View style={styles.dailyTasksPreview}>
+                      <Text style={[styles.tasksTitle, { color: theme.colors.onSurface }]}>
+                        Today's Tasks
+                      </Text>
+                      {activeChallenge.dailyTasks.slice(0, 2).map((task, index) => {
+                        const isCompleted = dailyTaskCompletions[index] === true;
+                        return (
+                          <View key={index} style={styles.taskPreviewItem}>
+                            <Icon
+                              name={isCompleted ? "check-circle" : "circle-outline"}
+                              size={18}
+                              color={isCompleted ? theme.colors.success : theme.colors.outline}
+                            />
+                            <Text
+                              style={[
+                                styles.taskPreviewText,
+                                { color: theme.colors.onSurfaceVariant },
+                                isCompleted && { textDecorationLine: 'line-through', opacity: 0.6 }
+                              ]}
+                            >
+                              {task}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                      {activeChallenge.dailyTasks.length > 2 && (
+                        <Text style={[styles.moreTasksText, { color: theme.colors.primary }]}>
+                          +{activeChallenge.dailyTasks.length - 2} more tasks
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Next Milestone Preview */}
+                  {nextMilestone && (
+                    <View style={styles.milestonePreview}>
+                      <Icon name="trophy-outline" size={20} color={theme.colors.warning || '#FF9800'} />
+                      <Text style={[styles.milestonePreviewText, { color: theme.colors.onSurfaceVariant }]}>
+                        Next: {nextMilestone.message}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Mini Weekly Progress Chart - Show always if challenge exists */}
+                  {updatedChallenge && (() => {
+                    try {
+                      console.log('📊 Rendering MiniProgressChart with challenge:', updatedChallenge.id);
+                      return (
+                        <MiniProgressChart
+                          challenge={updatedChallenge}
+                          onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
+                          style={styles.miniChart}
+                        />
+                      );
+                    } catch (err) {
+                      console.error('❌ Error rendering MiniProgressChart:', err);
+                      return null;
+                    }
+                  })()}
+
+                  <Button
+                    variant="primary"
+                    size="medium"
+                    icon="arrow-right"
+                    iconPosition="right"
+                    fullWidth
+                    onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
+                  >
+                    View Details
+                  </Button>
+                </Card>
+              );
+            } catch (error) {
+              console.error('Error rendering challenge:', error);
+              // Fallback: Show challenge even if there's an error
+              return (
+                <Card variant="elevated" style={styles.challengeCard}>
+                  <View style={styles.challengeHeader}>
+                    <Text style={[styles.challengeTitle, { color: theme.colors.onSurface }]}>
+                      {activeChallenge.title || 'Challenge'}
+                    </Text>
+                    {activeChallenge.difficulty && (
+                      <Badge
+                        variant={getDifficultyVariant(activeChallenge.difficulty)}
+                        size="small"
+                      >
+                        {activeChallenge.difficulty?.toUpperCase()}
+                      </Badge>
+                    )}
+                  </View>
+                  {activeChallenge.description && (
+                    <Text style={[styles.challengeDescription, { color: theme.colors.outline }]}>
+                      {activeChallenge.description}
+                    </Text>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="medium"
+                    icon="arrow-right"
+                    iconPosition="right"
+                    fullWidth
+                    onPress={() => navigation.navigate('ChallengeDetails', { challengeId: activeChallenge.id })}
+                  >
+                    View Details
+                  </Button>
+                </Card>
+              );
+            }
+          })() : (
+            <Card variant="outlined" style={styles.emptyChallengeCard}>
+              <Icon
+                name="target"
+                size={64}
+                color={theme.colors.outline}
+                style={styles.emptyIcon}
+              />
+              <Text style={[styles.emptyText, { color: theme.colors.onSurface }]}>
+                No active challenge
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.outline }]}>
+                Create a new challenge to get started!
+              </Text>
+              <Button
+                variant="primary"
+                size="medium"
+                icon="plus"
+                onPress={handleCreateChallenge}
+                style={styles.createButton}
+              >
+                Create Challenge
+              </Button>
+            </Card>
+          )}
+        </View>
+
+        {/* Step Counter Card */}
+        <View style={styles.stepCounterSection}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+            Activity Tracking
+          </Text>
+          <StepCounterCard style={styles.stepCounterCard} />
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <Card
+            variant="flat"
+            padding="medium"
+            style={[styles.quickActionCard, { borderColor: theme.colors.surfaceVariant }]}
+            onPress={() => navigation.navigate('Streak')}
+          >
+            <Icon name="fire" size={32} color={theme.colors.secondary} />
+            <Text style={[styles.quickActionText, { color: theme.colors.onSurface }]}>
+              View Streak
             </Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.outline }]}>
-              Create a new challenge to get started!
-            </Text>
-            <Button
-              variant="primary"
-              size="medium"
-              icon="plus"
-              onPress={() => navigation.getParent()?.navigate('ChallengeCreation')}
-              style={styles.createButton}
-            >
-              Create Challenge
-            </Button>
           </Card>
-        )}
-      </View>
+          <Card
+            variant="flat"
+            padding="medium"
+            style={[styles.quickActionCard, { borderColor: theme.colors.surfaceVariant }]}
+            onPress={() => navigation.navigate('ChallengeHistory')}
+          >
+            <Icon name="history" size={32} color={theme.colors.tertiary} />
+            <Text style={[styles.quickActionText, { color: theme.colors.onSurface }]}>
+              History
+            </Text>
+          </Card>
+        </View>
+      </ScrollView>
 
-      {/* Step Counter Card */}
-      <View style={styles.stepCounterSection}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-          Activity Tracking
-        </Text>
-        <StepCounterCard style={styles.stepCounterCard} />
-      </View>
-
-      {/* Quick Actions */}
-      <View style={styles.quickActions}>
-        <Card
-          variant="flat"
-          padding="medium"
-          style={[styles.quickActionCard, { borderColor: theme.colors.surfaceVariant }]}
-          onPress={() => navigation.navigate('Streak')}
-        >
-          <Icon name="fire" size={32} color={theme.colors.secondary} />
-          <Text style={[styles.quickActionText, { color: theme.colors.onSurface }]}>
-            View Streak
-          </Text>
-        </Card>
-        <Card
-          variant="flat"
-          padding="medium"
-          style={[styles.quickActionCard, { borderColor: theme.colors.surfaceVariant }]}
-          onPress={() => navigation.navigate('ChallengeHistory')}
-        >
-          <Icon name="history" size={32} color={theme.colors.tertiary} />
-          <Text style={[styles.quickActionText, { color: theme.colors.onSurface }]}>
-            History
-          </Text>
-        </Card>
-      </View>
-    </ScrollView>
+      {/* Airplane Animation Modal */}
+      <Modal
+        visible={showAirplaneAnimation}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAirplaneAnimation(false)}
+      >
+        <View style={[styles.animationModal, { backgroundColor: 'rgba(0, 0, 0, 0.4)' }]}>
+          <LottieView
+            ref={lottieRef}
+            source={require('../../assets/animations/man_airplane.json')}
+            autoPlay={false}
+            loop={false}
+            style={styles.lottieAnimation}
+            speed={1}
+            resizeMode="contain"
+            onAnimationFinish={() => {
+              console.log('🎬 Animation finished');
+            }}
+          />
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -657,7 +779,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 10,
   },
+  // Airplane animation styles
+  animationModal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lottieAnimation: {
+    width: width * 0.8,
+    height: width * 0.8,
+    alignSelf: 'center',
+  },
 });
 
 export default HomeScreen;
-

@@ -107,20 +107,6 @@ export const useStepCounter = () => {
     };
   }, []);
 
-  // Refresh steps when app comes to foreground
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active' && hasPermission && isAvailable) {
-        // App came to foreground - refresh steps
-        refresh();
-      }
-    });
-
-    return () => {
-      subscription?.remove();
-    };
-  }, [hasPermission, isAvailable, refresh]);
-
   // Initialize step counter (auto-load steps)
   const initializeStepCounter = useCallback(async () => {
     try {
@@ -434,6 +420,20 @@ export const useStepCounter = () => {
       setIsLoading(false);
     }
   }, [activityTracking, calculateMetrics, updateActivityTracking, checkDailyReset, resetActivityTracking]);
+
+  // Refresh steps when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && hasPermission && isAvailable) {
+        // App came to foreground - refresh steps
+        refresh();
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [hasPermission, isAvailable, refresh]);
 
   // Get calculated metrics from store's stepCount (single source of truth)
   const metrics = calculateMetrics(stepCount);

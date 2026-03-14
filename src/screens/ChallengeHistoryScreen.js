@@ -9,6 +9,7 @@ import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../assets/colors';
 import useStore from '../state/store';
+import { formatDuration } from '../utils/durationFormatter';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -94,7 +95,7 @@ function ChallengeHistoryScreen() {
                 <View style={styles.challengeMeta}>
                   {challenge.duration && (
                     <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>
-                      {challenge.duration} day{challenge.duration !== 1 ? 's' : ''}
+                      {formatDuration(challenge.duration)}
                     </Text>
                   )}
                   {challenge.completedAt && (

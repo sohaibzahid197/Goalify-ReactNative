@@ -9,6 +9,7 @@ import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import colors from '../assets/colors';
 import useStore from '../state/store';
+import { formatMilestoneDay } from '../utils/durationFormatter';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -100,7 +101,7 @@ function StreakScreen() {
                     achieved && styles.milestoneTextAchieved,
                   ]}
                 >
-                  {achieved ? '✓' : '○'} {milestone} Days
+                  {achieved ? '✓' : '○'} {formatMilestoneDay(milestone)}
                 </Text>
                 {achieved && (
                   <Text style={styles.milestoneBadge}>Achieved!</Text>
@@ -201,7 +202,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   statValue: {
-    fontSize: scaleFontSize(24),
+    fontSize: scaleFontSize(20),
     fontWeight: 'bold',
     marginBottom: 8,
   },

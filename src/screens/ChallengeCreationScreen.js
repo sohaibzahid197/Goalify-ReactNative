@@ -3,30 +3,23 @@
  * Allows users to create a new challenge
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Dimensions, Animated } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Dimensions, Animated, Modal } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import LottieView from 'lottie-react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Input, Button, Card, Badge } from '../components';
 import { useChallenge } from '../hooks/useChallenge';
 import { validateGoal } from '../utils/validation';
 import { getAllChallengeTemplates, getChallengesByCategory } from '../data/challengeTemplates';
 import { GRADIENTS } from '../assets/colors';
+import { scaleFontSize, scaleSize, scaleIcon, createSpacedStyles, spacedItem, SCREEN_WIDTH, SCREEN_HEIGHT } from '../utils/responsive';
+import { safeColors } from '../utils/themeColors';
+import { formatDuration, getDurationOptions } from '../utils/durationFormatter';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Responsive scaling function
-const scaleFontSize = (size) => {
-  const scale = SCREEN_WIDTH / 375; // Base width (iPhone X)
-  return Math.max(12, Math.min(size * scale, size * 1.3));
-};
-
-const scaleSize = (size) => {
-  const scale = SCREEN_WIDTH / 375;
-  return size * scale;
-};
+const { height: SCREEN_HEIGHT_REF } = Dimensions.get('window');
 
 function ChallengeCreationScreen({ navigation }) {
   const theme = useTheme();
@@ -41,9 +34,11 @@ function ChallengeCreationScreen({ navigation }) {
   const [duration, setDuration] = useState(7);
   const [loading, setLoading] = useState(false);
   const [goalError, setGoalError] = useState('');
-  
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+
   const templates = getChallengesByCategory(category);
-  
+  const successAnimRef = useRef(null);
+
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   
@@ -56,12 +51,12 @@ function ChallengeCreationScreen({ navigation }) {
   }, []);
 
   const difficulties = [
-    { value: 'easy', label: 'Easy', description: 'Perfect for beginners', icon: 'speedometer-slow' },
-    { value: 'medium', label: 'Medium', description: 'Balanced challenge', icon: 'speedometer-medium' },
-    { value: 'hard', label: 'Hard', description: 'Push your limits', icon: 'speedometer' },
+    { value: 'easy', label: 'Easy', description: 'Beginner friendly', icon: 'speedometer-slow' },
+    { value: 'medium', label: 'Medium', description: 'Moderate', icon: 'speedometer-medium' },
+    { value: 'hard', label: 'Hard', description: 'Advanced', icon: 'speedometer' },
   ];
 
-  const durations = [7, 14, 30];
+  const durations = getDurationOptions();
 
   const handleGoalChange = (text) => {
     setGoal(text);
@@ -72,12 +67,14 @@ function ChallengeCreationScreen({ navigation }) {
     setLoading(true);
     try {
       let challenge;
-      
+
       if (mode === 'template' && selectedTemplate) {
         // Create from template
+        console.log('📝 Creating challenge from template:', selectedTemplate.id);
         challenge = await createChallenge({
           templateId: selectedTemplate.id,
         });
+        console.log('✅ Challenge created from template:', challenge?.id, challenge?.title);
       } else {
         // Create custom challenge
         const validation = validateGoal(goal);
@@ -87,25 +84,47 @@ function ChallengeCreationScreen({ navigation }) {
           setLoading(false);
           return;
         }
-        
+
+        console.log('📝 Creating custom challenge:', validation.value);
         challenge = await createChallenge({
           goal: validation.value,
           difficulty,
           duration,
           category,
         });
+        console.log('✅ Custom challenge created:', challenge?.id, challenge?.title);
       }
-      
-      Alert.alert(
-        'Success! 🎉',
-        'Your challenge has been created!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+
+      // Verify challenge was created and set as active
+      const store = require('../state/store').default;
+      const state = store.getState();
+      console.log('🔍 After creation - activeChallenge:', state.activeChallenge?.id, state.activeChallenge?.title);
+      console.log('🔍 After creation - activeChallenge details:', JSON.stringify(state.activeChallenge));
+      console.log('🔍 After creation - all challenges:', state.challenges.length);
+
+      // Verify challenge exists and has required data
+      if (!state.activeChallenge || !state.activeChallenge.id) {
+        console.error('❌ Challenge creation failed - no activeChallenge in store');
+        throw new Error('Challenge was not properly created');
+      }
+
+      // Show success animation instead of alert
+      setLoading(false);
+      setShowSuccessAnimation(true);
+
+      // Play animation and navigate after it completes
+      setTimeout(() => {
+        if (successAnimRef.current) {
+          successAnimRef.current.play();
+        }
+      }, 50);
+
+      // Navigate after animation (1.2 seconds - optimized for quick feedback)
+      setTimeout(() => {
+        console.log('👈 Going back to HomeScreen');
+        setShowSuccessAnimation(false);
+        navigation.goBack();
+      }, 1200);
     } catch (error) {
       console.error('Error creating challenge:', error);
       Alert.alert(
@@ -147,13 +166,12 @@ function ChallengeCreationScreen({ navigation }) {
         <View style={styles.headerContent}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]}
+            style={[styles.backButton, { backgroundColor: safeColors.white + '33' }]}
           >
-            <Icon name="arrow-left" size={24} color="#FFFFFF" />
+            <Icon name="arrow-left" size={scaleIcon(24)} color={safeColors.white} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Create Challenge</Text>
-            <Text style={styles.headerSubtitle}>Start your journey to success! 🚀</Text>
           </View>
           <View style={styles.placeholder} />
         </View>
@@ -171,64 +189,64 @@ function ChallengeCreationScreen({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.modeButton,
-                mode === 'template' && styles.modeButtonActive,
-                mode === 'template' && { 
-                  backgroundColor: theme.colors.primary,
-                  shadowColor: theme.colors.primary,
+                {
+                  backgroundColor: mode === 'template' ? theme.colors.primary : theme.colors.surfaceVariant,
+                  shadowColor: mode === 'template' ? theme.colors.primary : '#000',
                 },
+                mode === 'template' && styles.modeButtonActive,
               ]}
               onPress={() => setMode('template')}
               activeOpacity={0.8}
             >
-              <View style={[styles.modeIconContainer, mode === 'template' && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <View style={[styles.modeIconContainer, mode === 'template' && { backgroundColor: theme.colors.primary + '33' }]}>
                 <Icon 
                   name="format-list-bulleted" 
-                  size={scaleSize(22)} 
-                  color={mode === 'template' ? '#FFFFFF' : theme.colors.onSurfaceVariant} 
+                  size={scaleIcon(22)} 
+                  color={mode === 'template' ? safeColors.white : theme.colors.onSurfaceVariant} 
                 />
               </View>
               <Text style={[
                 styles.modeText, 
-                { color: mode === 'template' ? '#FFFFFF' : theme.colors.onSurfaceVariant },
+                { color: mode === 'template' ? safeColors.white : theme.colors.onSurfaceVariant },
                 mode === 'template' && styles.modeTextActive
               ]}>
                 Templates
               </Text>
               {mode === 'template' && (
                 <View style={styles.modeIndicator}>
-                  <Icon name="check-circle" size={16} color="#FFFFFF" />
+                  <Icon name="check-circle" size={scaleIcon(16)} color={safeColors.white} />
                 </View>
               )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.modeButton,
-                mode === 'custom' && styles.modeButtonActive,
-                mode === 'custom' && { 
-                  backgroundColor: theme.colors.primary,
-                  shadowColor: theme.colors.primary,
+                {
+                  backgroundColor: mode === 'custom' ? theme.colors.primary : theme.colors.surfaceVariant,
+                  shadowColor: mode === 'custom' ? theme.colors.primary : '#000',
                 },
+                mode === 'custom' && styles.modeButtonActive,
               ]}
               onPress={() => setMode('custom')}
               activeOpacity={0.8}
             >
-              <View style={[styles.modeIconContainer, mode === 'custom' && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <View style={[styles.modeIconContainer, mode === 'custom' && { backgroundColor: theme.colors.primary + '33' }]}>
                 <Icon 
                   name="pencil" 
-                  size={scaleSize(22)} 
-                  color={mode === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant} 
+                  size={scaleIcon(22)} 
+                  color={mode === 'custom' ? safeColors.white : theme.colors.onSurfaceVariant} 
                 />
               </View>
               <Text style={[
                 styles.modeText, 
-                { color: mode === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant },
+                { color: mode === 'custom' ? safeColors.white : theme.colors.onSurfaceVariant },
                 mode === 'custom' && styles.modeTextActive
               ]}>
                 Custom
               </Text>
               {mode === 'custom' && (
                 <View style={styles.modeIndicator}>
-                  <Icon name="check-circle" size={16} color="#FFFFFF" />
+                  <Icon name="check-circle" size={scaleIcon(16)} color={safeColors.white} />
                 </View>
               )}
             </TouchableOpacity>
@@ -241,9 +259,9 @@ function ChallengeCreationScreen({ navigation }) {
             {/* Category Selection - Beautiful Pills */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="apps" size={scaleSize(20)} color={theme.colors.primary} />
+                <Icon name="apps" size={scaleIcon(20)} color={theme.colors.primary} style={{ marginRight: scaleSize(8) }} />
                 <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
-                  Choose Category
+                  Category
                 </Text>
               </View>
               <View style={styles.categoryContainer}>
@@ -255,9 +273,12 @@ function ChallengeCreationScreen({ navigation }) {
                       key={cat}
                       style={[
                         styles.categoryButton,
+                        {
+                          borderWidth: isSelected ? 2 : 0,
+                          borderColor: isSelected ? categoryColor : 'transparent',
+                          backgroundColor: isSelected ? categoryColor : theme.colors.surfaceVariant,
+                        },
                         isSelected && {
-                          backgroundColor: categoryColor,
-                          borderColor: categoryColor,
                           transform: [{ scale: 1.05 }],
                         },
                       ]}
@@ -269,28 +290,24 @@ function ChallengeCreationScreen({ navigation }) {
                     >
                       <View style={[
                         styles.categoryIconContainer,
-                        isSelected && { backgroundColor: 'rgba(255,255,255,0.2)' }
+                        isSelected && { backgroundColor: safeColors.white + '33' }
                       ]}>
                         <Icon 
                           name={getCategoryIcon(cat)} 
-                          size={scaleSize(24)} 
-                          color={isSelected ? '#FFFFFF' : categoryColor} 
+                          size={scaleIcon(18)} 
+                          color={isSelected ? safeColors.white : categoryColor} 
                         />
                       </View>
                       <Text
                         style={[
                           styles.categoryText,
-                          { color: isSelected ? '#FFFFFF' : theme.colors.onSurface },
+                          { color: isSelected ? safeColors.white : theme.colors.onSurface },
                           isSelected && styles.categoryTextActive
                         ]}
+                        numberOfLines={1}
                       >
                         {cat.charAt(0).toUpperCase() + cat.slice(1)}
                       </Text>
-                      {isSelected && (
-                        <View style={styles.categoryCheck}>
-                          <Icon name="check" size={16} color="#FFFFFF" />
-                        </View>
-                      )}
                     </TouchableOpacity>
                   );
                 })}
@@ -300,9 +317,9 @@ function ChallengeCreationScreen({ navigation }) {
             {/* Template Selection - Stunning Cards */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Icon name="star" size={scaleSize(20)} color={theme.colors.warning || '#FF9800'} />
+                <Icon name="star" size={scaleIcon(20)} color={theme.colors.warning || '#FF9800'} style={{ marginRight: scaleSize(8) }} />
                 <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
-                  Select Challenge
+                  Challenges
                 </Text>
               </View>
               <ScrollView 
@@ -317,9 +334,13 @@ function ChallengeCreationScreen({ navigation }) {
                       key={template.id}
                       style={[
                         styles.templateCard,
+                        {
+                          borderWidth: isSelected ? 2 : 0,
+                          borderColor: isSelected ? theme.colors.primary : 'transparent',
+                          backgroundColor: theme.colors.surface,
+                        },
                         isSelected && styles.templateCardSelected,
                         isSelected && {
-                          borderColor: theme.colors.primary,
                           shadowColor: theme.colors.primary,
                         },
                       ]}
@@ -339,8 +360,8 @@ function ChallengeCreationScreen({ navigation }) {
                         ]}>
                           <Icon 
                             name={template.icon || 'target'} 
-                            size={scaleSize(28)} 
-                            color={isSelected ? '#FFFFFF' : theme.colors.primary} 
+                            size={scaleIcon(28)} 
+                            color={isSelected ? safeColors.white : theme.colors.primary} 
                           />
                         </View>
                         <View style={styles.templateInfo}>
@@ -353,7 +374,7 @@ function ChallengeCreationScreen({ navigation }) {
                         </View>
                         {isSelected && (
                           <View style={styles.selectedBadge}>
-                            <Icon name="check-circle" size={24} color={theme.colors.primary} />
+                            <Icon name="check-circle" size={scaleIcon(24)} color={theme.colors.primary} />
                           </View>
                         )}
                       </View>
@@ -366,9 +387,9 @@ function ChallengeCreationScreen({ navigation }) {
                           {template.difficulty?.toUpperCase()}
                         </Badge>
                         <View style={styles.templateDurationContainer}>
-                          <Icon name="calendar-clock" size={14} color={theme.colors.onSurfaceVariant} />
+                          <Icon name="calendar-clock" size={scaleIcon(14)} color={theme.colors.onSurfaceVariant} style={{ marginRight: scaleSize(6) }} />
                           <Text style={[styles.templateDuration, { color: theme.colors.onSurfaceVariant }]}>
-                            {template.duration} days
+                            {formatDuration(template.duration)}
                           </Text>
                         </View>
                       </View>
@@ -382,8 +403,8 @@ function ChallengeCreationScreen({ navigation }) {
           <>
             {/* Goal Input */}
             <Input
-              label="What's your goal?"
-              placeholder="e.g., Run 5km daily, Learn Spanish, Read 30 minutes"
+              label="Your Goal"
+              placeholder="Enter your goal"
               value={goal}
               onChangeText={handleGoalChange}
               leftIcon="target"
@@ -397,12 +418,12 @@ function ChallengeCreationScreen({ navigation }) {
         {/* Difficulty Selection - Only for custom mode */}
         {mode === 'custom' && (
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Icon name="gauge" size={scaleSize(20)} color={theme.colors.primary} />
-              <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
-                Difficulty Level
-              </Text>
-            </View>
+              <View style={styles.sectionHeader}>
+                <Icon name="gauge" size={scaleIcon(20)} color={theme.colors.primary} style={{ marginRight: scaleSize(8) }} />
+                <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
+                  Difficulty
+                </Text>
+              </View>
             <View style={styles.difficultyContainer}>
               {difficulties.map((item) => {
                 const isSelected = difficulty === item.value;
@@ -418,15 +439,13 @@ function ChallengeCreationScreen({ navigation }) {
                     key={item.value}
                     style={[
                       styles.difficultyButton,
+                      {
+                        borderWidth: 0,
+                        backgroundColor: isSelected ? difficultyColor : theme.colors.surfaceVariant,
+                      },
                       isSelected && {
-                        backgroundColor: difficultyColor,
-                        borderColor: difficultyColor,
                         transform: [{ scale: 1.02 }],
                         shadowColor: difficultyColor,
-                      },
-                      !isSelected && {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.outline,
                       },
                     ]}
                     onPress={() => setDifficulty(item.value)}
@@ -434,19 +453,19 @@ function ChallengeCreationScreen({ navigation }) {
                   >
                     <View style={[
                       styles.difficultyIconContainer,
-                      isSelected && { backgroundColor: 'rgba(255,255,255,0.2)' }
+                      isSelected && { backgroundColor: safeColors.white + '33' }
                     ]}>
                       <Icon
                         name={item.icon}
-                        size={scaleSize(28)}
-                        color={isSelected ? '#FFFFFF' : difficultyColor}
+                        size={scaleIcon(28)}
+                        color={isSelected ? safeColors.white : difficultyColor}
                       />
                     </View>
                     <Text
                       style={[
                         styles.difficultyLabel,
                         {
-                          color: isSelected ? '#FFFFFF' : theme.colors.onSurface,
+                          color: isSelected ? safeColors.white : theme.colors.onSurface,
                           fontWeight: isSelected ? 'bold' : '600',
                         },
                       ]}
@@ -457,7 +476,7 @@ function ChallengeCreationScreen({ navigation }) {
                       style={[
                         styles.difficultyDescription,
                         {
-                          color: isSelected ? 'rgba(255,255,255,0.9)' : theme.colors.onSurfaceVariant,
+                          color: isSelected ? safeColors.white + 'E6' : theme.colors.onSurfaceVariant,
                         },
                       ]}
                     >
@@ -465,7 +484,7 @@ function ChallengeCreationScreen({ navigation }) {
                     </Text>
                     {isSelected && (
                       <View style={styles.difficultyCheck}>
-                        <Icon name="check-circle" size={20} color="#FFFFFF" />
+                        <Icon name="check-circle" size={scaleIcon(20)} color={safeColors.white} />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -478,68 +497,57 @@ function ChallengeCreationScreen({ navigation }) {
         {/* Duration Selection - Only for custom mode */}
         {mode === 'custom' && (
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Icon name="calendar-range" size={scaleSize(20)} color={theme.colors.primary} />
-              <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
-                Challenge Duration
-              </Text>
-            </View>
+              <View style={styles.sectionHeader}>
+                <Icon name="calendar-range" size={scaleIcon(20)} color={theme.colors.primary} style={{ marginRight: scaleSize(8) }} />
+                <Text style={[styles.sectionLabel, { color: theme.colors.onSurface }]}>
+                  Duration
+                </Text>
+              </View>
             <View style={styles.durationContainer}>
-              {durations.map((days) => {
-                const isSelected = duration === days;
+              {durations.map((durationOption) => {
+                const isSelected = duration === durationOption.days;
                 return (
                   <TouchableOpacity
-                    key={days}
+                    key={durationOption.days}
                     style={[
                       styles.durationButton,
+                      {
+                        borderWidth: 0,
+                        backgroundColor: isSelected ? theme.colors.primary : theme.colors.surfaceVariant,
+                      },
                       isSelected && {
-                        backgroundColor: theme.colors.primary,
-                        borderColor: theme.colors.primary,
                         transform: [{ scale: 1.05 }],
                         shadowColor: theme.colors.primary,
                       },
-                      !isSelected && {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.outline,
-                      },
                     ]}
-                    onPress={() => setDuration(days)}
+                    onPress={() => setDuration(durationOption.days)}
                     activeOpacity={0.8}
                   >
                     <View style={[
                       styles.durationIconContainer,
-                      isSelected && { backgroundColor: 'rgba(255,255,255,0.2)' }
+                      isSelected && { backgroundColor: safeColors.white + '33' }
                     ]}>
                       <Icon 
                         name="calendar-check" 
-                        size={scaleSize(24)} 
-                        color={isSelected ? '#FFFFFF' : theme.colors.primary} 
+                        size={scaleIcon(24)} 
+                        color={isSelected ? safeColors.white : theme.colors.primary} 
                       />
                     </View>
                     <Text
                       style={[
                         styles.durationValue,
                         {
-                          color: isSelected ? '#FFFFFF' : theme.colors.onSurface,
+                          color: isSelected ? safeColors.white : theme.colors.onSurface,
                           fontWeight: 'bold',
+                          fontSize: scaleFontSize(18),
                         },
                       ]}
                     >
-                      {days}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.durationLabel,
-                        {
-                          color: isSelected ? 'rgba(255,255,255,0.9)' : theme.colors.onSurfaceVariant,
-                        },
-                      ]}
-                    >
-                      {days === 1 ? 'day' : 'days'}
+                      {durationOption.label}
                     </Text>
                     {isSelected && (
                       <View style={styles.durationCheck}>
-                        <Icon name="check" size={16} color="#FFFFFF" />
+                        <Icon name="check" size={scaleIcon(16)} color={safeColors.white} />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -564,12 +572,12 @@ function ChallengeCreationScreen({ navigation }) {
                 style={styles.createButtonGradient}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={safeColors.white} />
                 ) : (
                   <>
-                    <Icon name="rocket-launch" size={scaleSize(24)} color="#FFFFFF" />
+                    <Icon name="rocket-launch" size={scaleIcon(24)} color={safeColors.white} style={{ marginRight: scaleSize(12) }} />
                     <Text style={styles.createButtonText}>Create Challenge</Text>
-                    <Icon name="arrow-right" size={scaleSize(20)} color="#FFFFFF" />
+                    <Icon name="arrow-right" size={scaleIcon(20)} color={safeColors.white} style={{ marginLeft: scaleSize(12) }} />
                   </>
                 )}
               </LinearGradient>
@@ -579,11 +587,12 @@ function ChallengeCreationScreen({ navigation }) {
               <View style={[styles.createButtonGradient, { backgroundColor: theme.colors.surfaceVariant }]}>
                 <Icon 
                   name={mode === 'template' ? 'cursor-pointer' : 'pencil'} 
-                  size={scaleSize(20)} 
+                  size={scaleIcon(20)} 
                   color={theme.colors.onSurfaceVariant} 
+                  style={{ marginRight: scaleSize(12) }}
                 />
                 <Text style={[styles.createButtonText, { color: theme.colors.onSurfaceVariant }]}>
-                  {mode === 'template' ? 'Select a Challenge' : 'Enter Your Goal'}
+                  {mode === 'template' ? 'Select Challenge' : 'Enter Goal'}
                 </Text>
               </View>
             </View>
@@ -591,6 +600,30 @@ function ChallengeCreationScreen({ navigation }) {
         </Card>
         </Animated.View>
       </ScrollView>
+
+      {/* Success Animation Modal */}
+      <Modal
+        visible={showSuccessAnimation}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessAnimation(false)}
+      >
+        <View style={styles.successModalContainer}>
+          <View style={styles.successAnimationWrapper}>
+            <LottieView
+              ref={successAnimRef}
+              source={require('../../assets/animations/successful.json')}
+              autoPlay={false}
+              loop={false}
+              style={styles.successAnimation}
+              speed={1.3}
+            />
+            <Text style={[styles.successText, { color: theme.colors.onSurface }]}>
+              Challenge Created! 🎉
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -629,12 +662,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: scaleFontSize(28),
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: safeColors.white,
     marginBottom: scaleSize(4),
   },
   headerSubtitle: {
     fontSize: scaleFontSize(14),
-    color: 'rgba(255,255,255,0.9)',
+    color: safeColors.white + 'E6',
     fontWeight: '500',
   },
   placeholder: {
@@ -650,7 +683,7 @@ const styles = StyleSheet.create({
   },
   modeContainer: {
     flexDirection: 'row',
-    gap: scaleSize(12),
+    marginHorizontal: -scaleSize(6),
     marginBottom: scaleSize(24),
   },
   modeButton: {
@@ -660,15 +693,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: scaleSize(16),
     borderRadius: scaleSize(16),
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#F5F5F5',
-    gap: scaleSize(8),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 0,
+    marginHorizontal: scaleSize(6),
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modeButtonActive: {
     shadowOpacity: 0.3,
@@ -679,9 +709,10 @@ const styles = StyleSheet.create({
     width: scaleSize(36),
     height: scaleSize(36),
     borderRadius: scaleSize(18),
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: scaleSize(8),
   },
   modeText: {
     fontSize: scaleFontSize(16),
@@ -697,19 +728,18 @@ const styles = StyleSheet.create({
     borderRadius: scaleSize(24),
     padding: scaleSize(24),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   section: {
-    marginTop: scaleSize(28),
+    marginTop: scaleSize(24),
     marginBottom: scaleSize(8),
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleSize(8),
     marginBottom: scaleSize(16),
   },
   sectionLabel: {
@@ -718,36 +748,39 @@ const styles = StyleSheet.create({
   },
   categoryContainer: {
     flexDirection: 'row',
-    gap: scaleSize(12),
+    marginHorizontal: -scaleSize(6),
   },
   categoryButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: scaleSize(16),
+    paddingVertical: scaleSize(12),
+    paddingHorizontal: scaleSize(10),
     borderRadius: scaleSize(16),
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    backgroundColor: '#F5F5F5',
-    gap: scaleSize(8),
+    borderWidth: 0,
+    marginHorizontal: scaleSize(6),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+    minWidth: 0,
   },
   categoryIconContainer: {
-    width: scaleSize(32),
-    height: scaleSize(32),
-    borderRadius: scaleSize(16),
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    width: scaleSize(24),
+    height: scaleSize(24),
+    borderRadius: scaleSize(12),
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: scaleSize(6),
   },
   categoryText: {
     fontSize: scaleFontSize(14),
     fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   categoryTextActive: {
     fontWeight: 'bold',
@@ -760,23 +793,21 @@ const styles = StyleSheet.create({
   },
   templateCard: {
     padding: scaleSize(20),
-    borderRadius: scaleSize(20),
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    marginBottom: scaleSize(16),
-    backgroundColor: '#FFFFFF',
+    borderRadius: scaleSize(16),
+    borderWidth: 0,
+    marginBottom: scaleSize(12),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
     overflow: 'hidden',
   },
   templateCardSelected: {
-    borderWidth: 3,
-    shadowOpacity: 0.2,
+    borderWidth: 2,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 6,
   },
   templateGradient: {
     position: 'absolute',
@@ -789,15 +820,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: scaleSize(16),
-    gap: scaleSize(12),
   },
   templateIconContainer: {
     width: scaleSize(56),
     height: scaleSize(56),
     borderRadius: scaleSize(16),
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: scaleSize(12),
   },
   templateInfo: {
     flex: 1,
@@ -818,6 +849,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: scaleSize(4),
   },
   templateBadge: {
     marginRight: scaleSize(8),
@@ -825,33 +857,32 @@ const styles = StyleSheet.create({
   templateDurationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleSize(6),
   },
   templateDuration: {
     fontSize: scaleFontSize(12),
     fontWeight: '600',
   },
   difficultyContainer: {
-    gap: scaleSize(16),
+    // Spacing handled by marginBottom in difficultyButton
   },
   difficultyButton: {
     borderRadius: scaleSize(20),
-    borderWidth: 2,
+    borderWidth: 0,
     padding: scaleSize(20),
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    marginBottom: scaleSize(16),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 3,
+    elevation: 2,
     position: 'relative',
   },
   difficultyIconContainer: {
     width: scaleSize(56),
     height: scaleSize(56),
     borderRadius: scaleSize(28),
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: scaleSize(12),
@@ -871,28 +902,28 @@ const styles = StyleSheet.create({
   },
   durationContainer: {
     flexDirection: 'row',
-    gap: scaleSize(12),
+    marginHorizontal: -scaleSize(6),
   },
   durationButton: {
     flex: 1,
     borderRadius: scaleSize(20),
-    borderWidth: 2,
+    borderWidth: 0,
     paddingVertical: scaleSize(24),
     paddingHorizontal: scaleSize(12),
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    marginHorizontal: scaleSize(6),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 3,
+    elevation: 2,
     position: 'relative',
   },
   durationIconContainer: {
     width: scaleSize(40),
     height: scaleSize(40),
     borderRadius: scaleSize(20),
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: scaleSize(8),
@@ -912,7 +943,7 @@ const styles = StyleSheet.create({
     width: scaleSize(24),
     height: scaleSize(24),
     borderRadius: scaleSize(12),
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: safeColors.white + '4D',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -935,12 +966,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: scaleSize(18),
     paddingHorizontal: scaleSize(24),
-    gap: scaleSize(12),
   },
   createButtonText: {
     fontSize: scaleFontSize(18),
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: safeColors.white,
+  },
+  // Success Animation Styles
+  successModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successAnimationWrapper: {
+    width: '85%',
+    backgroundColor: '#ffffff',
+    borderRadius: scaleSize(24),
+    padding: scaleSize(32),
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  successAnimation: {
+    width: scaleSize(200),
+    height: scaleSize(200),
+    marginBottom: scaleSize(16),
+  },
+  successText: {
+    fontSize: scaleFontSize(20),
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: scaleSize(8),
   },
 });
 

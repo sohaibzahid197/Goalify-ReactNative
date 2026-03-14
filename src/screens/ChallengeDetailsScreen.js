@@ -13,6 +13,7 @@ import { Card, Button, ProgressRing, Badge, WeeklyProgressChart, MonthlyTrendCha
 import { GRADIENTS } from '../assets/colors';
 import useStore from '../state/store';
 import { updateChallengeProgress, isTodayTargetMet, isDailyTaskCompleted, getNextMilestone, getReachedMilestones, getProgressValue, getTaskProgress, isActivityTask } from '../utils/challengeProgress';
+import { formatDuration, formatMilestoneDay } from '../utils/durationFormatter';
 import { challengeActions } from '../state/actions';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -26,53 +27,46 @@ function ChallengeDetailsScreen({ route, navigation }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { challengeId } = route.params || {};
-  
+
   const challenges = useStore((state) => state.challenges);
   const activeChallenge = useStore((state) => state.activeChallenge);
   const activityTracking = useStore((state) => state.activityTracking);
   const user = useStore((state) => state.user);
-  
+
   const challenge = challenges.find(c => c.id === challengeId) || activeChallenge;
   const setActiveChallenge = useStore((state) => state.setActiveChallenge);
-  
+
   const [dailyTaskCompletions, setDailyTaskCompletions] = useState({});
-  
-  // Update challenge progress when activity changes (real-time updates)
+
   useEffect(() => {
     if (challenge) {
       const today = new Date().toISOString().split('T')[0];
       setDailyTaskCompletions(challenge.dailyTaskCompletions?.[today] || {});
-      
-      // Auto-update challenge progress when activity tracking changes
+
       const updatedChallenge = updateChallengeProgress(
-        challenge, 
-        activityTracking, 
+        challenge,
+        activityTracking,
         user.dailyStepGoal
       );
-      
-      // Check if challenge changed
-      const challengeChanged = 
+
+      const challengeChanged =
         JSON.stringify(updatedChallenge.dailyCompletions) !== JSON.stringify(challenge.dailyCompletions) ||
         updatedChallenge.progress !== challenge.progress ||
         JSON.stringify(updatedChallenge.milestonesReached) !== JSON.stringify(challenge.milestonesReached);
-      
+
       if (challengeChanged) {
-        // Update in store with full updated challenge object
         challengeActions.updateChallengeProgress(
-          challenge.id, 
-          updatedChallenge.progress, 
+          challenge.id,
+          updatedChallenge.progress,
           updatedChallenge
         );
-        
-        // Handle milestone celebrations
+
         if (updatedChallenge.newMilestones && updatedChallenge.newMilestones.length > 0) {
           updatedChallenge.newMilestones.forEach(milestone => {
             console.log(`🎉 Milestone reached: ${milestone.message}`);
-            // TODO: Show milestone celebration animation/notification
           });
         }
-        
-        // Update active challenge if this is the active one
+
         if (activeChallenge?.id === challenge.id) {
           setActiveChallenge(updatedChallenge);
         }
@@ -80,8 +74,8 @@ function ChallengeDetailsScreen({ route, navigation }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    challenge?.id, 
-    activityTracking.todaySteps, 
+    challenge?.id,
+    activityTracking.todaySteps,
     activityTracking.todayCalories,
     activityTracking.todayDistance,
     user.dailyStepGoal
@@ -97,40 +91,34 @@ function ChallengeDetailsScreen({ route, navigation }) {
     );
   }
 
-  // Calculate challenge state (always use latest from updateChallengeProgress)
-  // This ensures we're using the most up-to-date challenge with dailyCompletions and dailyBreakdown
   const currentChallenge = updateChallengeProgress(challenge, activityTracking, user.dailyStepGoal);
   const today = new Date().toISOString().split('T')[0];
   const todayMet = isTodayTargetMet(currentChallenge, activityTracking, user.dailyStepGoal);
   const nextMilestone = getNextMilestone(currentChallenge);
   const reachedMilestones = getReachedMilestones(currentChallenge);
-  
-  // Calculate task completion count (includes both manual and activity tasks)
+
   const calculateTaskCompletionCount = () => {
     if (!challenge.dailyTasks || challenge.dailyTasks.length === 0) return 0;
-    
+
     let completedCount = 0;
     challenge.dailyTasks.forEach((task, index) => {
       const taskProgress = getTaskProgress(task, challenge, activityTracking, user.dailyStepGoal);
       if (taskProgress !== null) {
-        // Activity-based task - check if completed
         if (taskProgress.completed) {
           completedCount++;
         }
       } else {
-        // Manual task - check dailyTaskCompletions
         if (dailyTaskCompletions[index] === true) {
           completedCount++;
         }
       }
     });
-    
+
     return completedCount;
   };
-  
+
   const taskCompletionCount = calculateTaskCompletionCount();
-  
-  // Debug: Log dailyBreakdown for troubleshooting
+
   if (__DEV__) {
     console.log('ChallengeDetailsScreen - dailyBreakdown:', currentChallenge.progress?.dailyBreakdown?.length || 0, 'days');
     console.log('ChallengeDetailsScreen - progress object:', currentChallenge.progress);
@@ -143,8 +131,7 @@ function ChallengeDetailsScreen({ route, navigation }) {
       [taskIndex]: !dailyTaskCompletions[taskIndex],
     };
     setDailyTaskCompletions(newCompletions);
-    
-    // Update in store with full challenge object (preserves dailyCompletions, progress, etc.)
+
     const challengeWithTasks = {
       ...challenge,
       dailyTaskCompletions: {
@@ -152,21 +139,19 @@ function ChallengeDetailsScreen({ route, navigation }) {
         [today]: newCompletions,
       },
     };
-    
-    // Recalculate progress with updated task completions
+
     const challengeWithProgress = updateChallengeProgress(
-      challengeWithTasks, 
-      activityTracking, 
+      challengeWithTasks,
+      activityTracking,
       user.dailyStepGoal
     );
-    
+
     challengeActions.updateChallengeProgress(
-      challenge.id, 
-      challengeWithProgress.progress, 
+      challenge.id,
+      challengeWithProgress.progress,
       challengeWithProgress
     );
-    
-    // Update active challenge if this is the active one
+
     if (activeChallenge?.id === challenge.id) {
       setActiveChallenge(challengeWithProgress);
     }
@@ -174,20 +159,16 @@ function ChallengeDetailsScreen({ route, navigation }) {
 
   const getDifficultyColor = (difficulty) => {
     switch (difficulty?.toLowerCase()) {
-      case 'easy':
-        return theme.colors.success || '#4CAF50';
-      case 'medium':
-        return theme.colors.warning || '#FF9800';
-      case 'hard':
-        return theme.colors.error || '#F44336';
-      default:
-        return theme.colors.primary;
+      case 'easy': return theme.colors.success || '#4CAF50';
+      case 'medium': return theme.colors.warning || '#FF9800';
+      case 'hard': return theme.colors.error || '#F44336';
+      default: return theme.colors.primary;
     }
   };
 
   const getActivityStatus = () => {
     if (!challenge.activityType) return null;
-    
+
     const { activityType, targetValue } = challenge;
     let currentValue = 0;
     let target = targetValue;
@@ -240,14 +221,17 @@ function ChallengeDetailsScreen({ route, navigation }) {
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top + 16, 20) }]}
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Icon name="arrow-left" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{challenge.title || currentChallenge.title}</Text>
+        {/* Back button and title on the same row */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-left" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {challenge.title || currentChallenge.title}
+          </Text>
           <Badge
             variant={challenge.difficulty === 'easy' ? 'success' : challenge.difficulty === 'hard' ? 'error' : 'warning'}
             size="small"
@@ -284,7 +268,7 @@ function ChallengeDetailsScreen({ route, navigation }) {
               {currentChallenge.daysRemaining || 0} days left
             </Text>
             <Text style={[styles.progressSubtext, { color: theme.colors.onSurfaceVariant }]}>
-              {currentChallenge.duration || 7} day challenge
+              {formatDuration(currentChallenge.duration || 7)} challenge
             </Text>
           </View>
         </View>
@@ -331,9 +315,9 @@ function ChallengeDetailsScreen({ route, navigation }) {
         </Card>
       )}
 
-      {/* Weekly Progress Chart - Show always if challenge exists */}
+      {/* Weekly Progress Chart */}
       {currentChallenge && (
-        <WeeklyProgressChart 
+        <WeeklyProgressChart
           challenge={currentChallenge}
           style={styles.chartContainer}
           height={220}
@@ -342,9 +326,9 @@ function ChallengeDetailsScreen({ route, navigation }) {
         />
       )}
 
-      {/* Monthly Trend Chart - Show if challenge duration >= 14 days */}
+      {/* Monthly Trend Chart */}
       {currentChallenge && currentChallenge.duration >= 14 && (
-        <MonthlyTrendChart 
+        <MonthlyTrendChart
           challenge={currentChallenge}
           style={styles.chartContainer}
           height={220}
@@ -365,13 +349,12 @@ function ChallengeDetailsScreen({ route, navigation }) {
           </View>
           <View style={styles.tasksList}>
             {challenge.dailyTasks.map((task, index) => {
-              // Check if this is an activity-based task
               const taskProgress = getTaskProgress(task, challenge, activityTracking, user.dailyStepGoal);
               const isActivityBased = taskProgress !== null;
-              const isCompleted = isActivityBased 
-                ? taskProgress.completed 
+              const isCompleted = isActivityBased
+                ? taskProgress.completed
                 : (dailyTaskCompletions[index] === true);
-              
+
               return (
                 <TouchableOpacity
                   key={index}
@@ -380,7 +363,7 @@ function ChallengeDetailsScreen({ route, navigation }) {
                     isCompleted && { backgroundColor: theme.colors.surfaceVariant },
                   ]}
                   onPress={() => !isActivityBased && handleTaskToggle(index)}
-                  disabled={isActivityBased} // Disable manual toggle for activity tasks
+                  disabled={isActivityBased}
                 >
                   <View style={styles.taskContent}>
                     <View style={[
@@ -420,11 +403,11 @@ function ChallengeDetailsScreen({ route, navigation }) {
                                 styles.taskProgressBarFill,
                                 {
                                   width: `${taskProgress.progress}%`,
-                                  backgroundColor: isCompleted 
+                                  backgroundColor: isCompleted
                                     ? (theme.colors.success || '#4CAF50')
-                                    : (taskProgress.progress >= 75 
-                                        ? (theme.colors.warning || '#FF9800')
-                                        : theme.colors.primary),
+                                    : (taskProgress.progress >= 75
+                                      ? (theme.colors.warning || '#FF9800')
+                                      : theme.colors.primary),
                                 },
                               ]}
                             />
@@ -448,52 +431,100 @@ function ChallengeDetailsScreen({ route, navigation }) {
         </Card>
       )}
 
-      {/* Milestones */}
+      {/* Milestones - Vertical Progress Timeline */}
       {challenge.milestones && challenge.milestones.length > 0 && (
         <Card variant="elevated" style={styles.milestonesCard}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-            Milestones
-          </Text>
+          <View style={styles.milestonesHeader}>
+            <Icon name="trophy-outline" size={28} color={theme.colors.primary} />
+            <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginLeft: 12 }]}>
+              Milestones
+            </Text>
+          </View>
           <View style={styles.milestonesList}>
             {challenge.milestones.map((milestone, index) => {
               const isReached = reachedMilestones.some(m => m.day === milestone.day);
               const isNext = nextMilestone?.day === milestone.day;
-              
+              const isLocked = !isReached && !isNext;
+              const isLastItem = index === challenge.milestones.length - 1;
+
+              let badgeColor = '#06b6d4';
+              let badgeBgColor = '#ecfeff';
+              let badgeIcon = '🥉';
+              if (milestone.badge === 'silver') {
+                badgeColor = '#64748b';
+                badgeBgColor = '#f1f5f9';
+                badgeIcon = '🥈';
+              } else if (milestone.badge === 'gold') {
+                badgeColor = '#f59e0b';
+                badgeBgColor = '#fff7ed';
+                badgeIcon = '🥇';
+              }
+
               return (
-                <View
-                  key={index}
-                  style={[
-                    styles.milestoneItem,
-                    isReached && { backgroundColor: theme.colors.surfaceVariant },
-                  ]}
-                >
-                  <View style={[
-                    styles.milestoneIcon,
-                    isReached && { backgroundColor: theme.colors.primary },
-                    isNext && !isReached && { backgroundColor: theme.colors.primaryContainer },
-                  ]}>
-                    {isReached ? (
-                      <Icon name="trophy" size={24} color="#FFFFFF" />
-                    ) : (
-                      <Text style={[styles.milestoneDay, { color: theme.colors.onSurface }]}>
-                        {milestone.day}
+                <View key={index} style={{ position: 'relative' }}>
+                  <View
+                    style={[
+                      styles.milestoneItem,
+                      isReached && styles.milestoneItemReached,
+                      isNext && !isReached && styles.milestoneItemNext,
+                      isLocked && styles.milestoneItemLocked,
+                    ]}
+                  >
+                    {/* Timeline Circle */}
+                    <View style={[
+                      styles.timelineCircle,
+                      isReached && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                      isNext && !isReached && { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
+                      isLocked && { backgroundColor: '#e2e8f0', borderColor: '#cbd5e1' },
+                    ]}>
+                      {isReached ? (
+                        <Icon name="check-bold" size={20} color="#FFFFFF" />
+                      ) : isLocked ? (
+                        <Icon name="lock" size={18} color="#94a3b8" />
+                      ) : (
+                        <Text style={[styles.milestoneDay, { color: theme.colors.onSurface }]}>
+                          {formatMilestoneDay(milestone.day)}
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Content */}
+                    <View style={styles.milestoneContent}>
+                      <Text style={[
+                        styles.milestoneMessage,
+                        { color: isLocked ? '#94a3b8' : theme.colors.onSurface, fontWeight: '700' }
+                      ]}>
+                        {isReached && '🎉 '}{milestone.message}
                       </Text>
-                    )}
+                      <Text style={[
+                        styles.milestoneSubtitle,
+                        { color: isLocked ? '#cbd5e1' : theme.colors.onSurfaceVariant }
+                      ]}>
+                        {isReached ? '✓ Completed' : isNext ? 'Current milestone' : 'Locked - Complete previous'}
+                      </Text>
+                      {milestone.badge && isReached && (
+                        <View style={[styles.milestoneBadge, { backgroundColor: badgeBgColor }]}>
+                          <Text style={{ fontSize: 16, marginRight: 8 }}>{badgeIcon}</Text>
+                          <Text style={[styles.badgeText, { color: badgeColor }]}>
+                            {milestone.badge.charAt(0).toUpperCase() + milestone.badge.slice(1)} Badge
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <View style={styles.milestoneContent}>
-                    <Text style={[styles.milestoneMessage, { color: theme.colors.onSurface }]}>
-                      {milestone.message}
-                    </Text>
-                    {milestone.badge && (
-                      <Badge
-                        variant={milestone.badge === 'gold' ? 'warning' : milestone.badge === 'silver' ? 'default' : 'success'}
-                        size="small"
-                        style={styles.milestoneBadge}
-                      >
-                        {milestone.badge.toUpperCase()}
-                      </Badge>
-                    )}
-                  </View>
+
+                  {/* Connection Line */}
+                  {!isLastItem && (
+                    <View
+                      style={[
+                        styles.connectionLine,
+                        {
+                          backgroundColor: isReached ? theme.colors.primary : '#cbd5e1',
+                          zIndex: 1,
+                        }
+                      ]}
+                    />
+                  )}
                 </View>
               );
             })}
@@ -551,26 +582,26 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
+  // ── Single row: back arrow + title + difficulty badge ──
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   backButton: {
-    marginBottom: 16,
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  headerContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginRight: 8,
   },
   headerTitle: {
-    fontSize: scaleFontSize(28),
+    fontSize: scaleFontSize(22),
     fontWeight: 'bold',
     color: '#FFFFFF',
     flex: 1,
   },
   difficultyBadge: {
-    marginLeft: 12,
+    marginLeft: 8,
   },
   progressCard: {
     margin: 20,
@@ -755,39 +786,89 @@ const styles = StyleSheet.create({
     marginTop: 0,
     padding: 20,
   },
+  milestonesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   milestonesList: {
-    marginTop: 16,
+    paddingLeft: 0,
+  },
+  connectionLine: {
+    position: 'absolute',
+    left: 39,
+    top: 72,
+    width: 3,
+    height: 44,
+    zIndex: 1,
   },
   milestoneItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+    alignItems: 'flex-start',
+    paddingVertical: 16,
+    paddingLeft: 12,
+    paddingRight: 8,
+    marginBottom: 8,
     borderRadius: 12,
-    marginBottom: 12,
+    backgroundColor: '#ffffff',
   },
-  milestoneIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E0E0E0',
+  milestoneItemReached: {
+    backgroundColor: '#ecfeff20',
+  },
+  milestoneItemNext: {
+    backgroundColor: '#ecfeff40',
+  },
+  milestoneItemLocked: {
+    backgroundColor: '#f1f5f930',
+    opacity: 0.7,
+  },
+  timelineCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#e2e8f0',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    flexShrink: 0,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
   },
   milestoneDay: {
     fontSize: scaleFontSize(18),
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
   milestoneContent: {
     flex: 1,
+    justifyContent: 'center',
   },
   milestoneMessage: {
     fontSize: scaleFontSize(16),
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '700',
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  milestoneSubtitle: {
+    fontSize: scaleFontSize(13),
+    fontWeight: '500',
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   milestoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  badgeText: {
+    fontSize: scaleFontSize(12),
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   tipsCard: {
     margin: 20,
